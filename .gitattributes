@@ -1,0 +1,12 @@
+# Forzar a Git a gestionar los saltos de línea automáticamente
+* text=auto
+
+# Asegurar que el código fuente de Odin siempre use LF
+*.odin text eol=lf
+
+# Otros formatos de código y configuración común
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
