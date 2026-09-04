@@ -6,32 +6,132 @@ import "core:os"
 import "core:strconv"
 import "core:strings"
 
-// 1. Definimos la estructura para los contratos de futuros
+// 1. Structure definition for futures contracts
 FutureContract :: struct {
 	name:          string,
 	ticker:        string,
-	tick_size:     f64, // Movimiento mínimo (ej: 0.25)
-	point_value:   f64, // Valor en euros de 1 punto entero (ej: $2 o 2€)
-	cost_per_side: f64, // Comisión por abrir o cerrar 1 contrato
+	tick_size:     f64, // Minimum price movement (e.g., 0.25)
+	point_value:   f64, // Value in base currency of 1 full point (e.g., $2 or 2€)
+	cost_per_side: f64, // Commission fee per side (open or close) for 1 contract
+}
+
+// Supported languages for user interface
+Language :: enum {
+	Spanish,
+	English,
+}
+
+// Localized strings container
+Messages :: struct {
+	banner:             string,
+	prompt_market:      string,
+	unsupported_market: string,
+	selected_contract:  string,
+	prompt_direction:   string,
+	prompt_qty:         string,
+	prompt_entry:       string,
+	prompt_exit:        string,
+	net_result:         string,
+	gross_and_costs:    string,
+	file_open_error:    string,
+	log_format:         string,
+	log_success:        string,
+}
+
+// Returns localized messages for the specified language
+get_messages :: proc(lang: Language) -> Messages {
+	switch lang {
+	case .English:
+		return Messages{
+			banner             = "--- 📈 FUTURES CALCULATOR & LOGGER (ODIN) ---",
+			prompt_market      = "Enter index (nasdaq, s&p, dow jones, russell, mini dax, micro dax, eurostoxx): ",
+			unsupported_market = "❌ Unsupported market. Please enter one from the list.",
+			selected_contract  = "📌 Selected: %s (%s) [Point Value: %.2f€]\n",
+			prompt_direction   = "Direction? Long (L) or Short (S/C): ",
+			prompt_qty         = "Quantity of contracts to trade: ",
+			prompt_entry       = "ENTRY price: ",
+			prompt_exit        = "EXIT price: ",
+			net_result         = "\n-------------------------------------------\n📊 NET RESULT: %.2f €\n",
+			gross_and_costs    = "💰 Gross Profit: %.2f € | 💸 Commissions paid: %.2f €\n-------------------------------------------\n",
+			file_open_error    = "⚠️ Could not open file to save trade operation.",
+			log_format         = "Market: %s | Type: %s | Contracts: %d | Entry: %.2f | Exit: %.2f | Net PnL: %.2f €\n",
+			log_success        = "💾 Trade successfully logged to 'historial_trading.txt'!",
+		}
+	case .Spanish:
+		return Messages{
+			banner             = "--- 📈 CALCULADORA DE FUTUROS & REGISTRO (ODIN) ---",
+			prompt_market      = "Introduce el índice (nasdaq, s&p, dow jones, russell, mini dax, micro dax, eurostoxx): ",
+			unsupported_market = "❌ Mercado no soportado. Introduce uno de la lista.",
+			selected_contract  = "📌 Seleccionado: %s (%s) [Valor Punto: %.2f€]\n",
+			prompt_direction   = "¿Dirección? Largos (L) o Cortos (C): ",
+			prompt_qty         = "Cantidad de contratos a operar: ",
+			prompt_entry       = "Precio de ENTRADA: ",
+			prompt_exit        = "Precio de SALIDA: ",
+			net_result         = "\n-------------------------------------------\n📊 RESULTADO NETO: %.2f €\n",
+			gross_and_costs    = "💰 Beneficio Bruto: %.2f € | 💸 Comisiones pagadas: %.2f €\n-------------------------------------------\n",
+			file_open_error    = "⚠️ No se pudo abrir el archivo para guardar la operación.",
+			log_format         = "Mercado: %s | Tipo: %s | Contratos: %d | Entrada: %.2f | Salida: %.2f | PnL Neto: %.2f €\n",
+			log_success        = "💾 ¡Operación registrada con éxito en 'historial_trading.txt'!",
+		}
+	}
+	return Messages{}
+}
+
+// Reads configuration file to determine language; defaults to Spanish and writes config.ini if missing
+load_language_config :: proc(filepath: string) -> Language {
+	data, err := os.read_entire_file(filepath, context.temp_allocator)
+	if err != os.ERROR_NONE {
+		default_config := "# Language configuration: \"en\" for English, \"es\" for Spanish\nlanguage = es\n"
+		_ = os.write_entire_file(filepath, transmute([]byte)default_config)
+		return .Spanish
+	}
+
+	content := string(data)
+	lines := strings.split_lines(content, context.temp_allocator)
+	for line in lines {
+		trimmed := strings.trim_space(line)
+		if len(trimmed) == 0 || strings.has_prefix(trimmed, "#") || strings.has_prefix(trimmed, ";") {
+			continue
+		}
+
+		parts := strings.split(trimmed, "=", context.temp_allocator)
+		if len(parts) == 2 {
+			key := strings.to_lower(strings.trim_space(parts[0]))
+			val := strings.to_lower(strings.trim_space(parts[1]))
+			if key == "language" || key == "lang" {
+				if strings.has_prefix(val, "en") {
+					return .English
+				} else if strings.has_prefix(val, "es") {
+					return .Spanish
+				}
+			}
+		}
+	}
+
+	return .Spanish
 }
 
 main :: proc() {
 	defer free_all(context.temp_allocator)
 
-	// Configuración del lector de terminal
+	// Load language settings from configuration
+	lang := load_language_config("config.ini")
+	msg := get_messages(lang)
+
+	// Terminal input reader setup
 	reader: bufio.Reader
 	buffer: [1024]byte
 	bufio.reader_init_with_buf(&reader, os.to_stream(os.stdin), buffer[:])
 
-	// 2. Creamos y cargamos el MAP con la colección de índices (Versiones Micro E-mini)
-	// Nota: El valor por punto está ajustado en Euros (aprox) o dólares base según tu broker.
+	// 2. Create and populate map of market indices (Micro E-mini and Mini contracts)
+	// Note: Point value is calibrated to euros or dollars depending on broker settings.
 	market_database := make(map[string]FutureContract)
-	defer delete(market_database) // Buenas prácticas: liberar el mapa al terminar
+	defer delete(market_database) // Best practice: free map upon exit
 
 	market_database["nasdaq"] = FutureContract{"Micro E-mini Nasdaq 100", "MNQ", 0.25, 2.0, 0.60}
 	market_database["s&p"] = FutureContract{"Micro E-mini S&P 500", "MES", 0.25, 5.0, 0.60}
 	market_database["dow jones"] = FutureContract{"Micro E-mini Dow Jones", "MYM", 1.00, 0.5, 0.60}
-	market_database["russell"] = FutureContract {
+	market_database["russell"] = FutureContract{
 		"Micro E-mini Russell 2000",
 		"M2K",
 		0.10,
@@ -42,92 +142,98 @@ main :: proc() {
 	market_database["micro dax"] = FutureContract{"Micro Dax", "FDXS", 1, 1, 0.75}
 	market_database["eurostoxx"] = FutureContract{"EuroStoxx", "FESX", 1, 10, 3.50}
 
-	fmt.println("--- 📈 CALCULADORA DE FUTUROS & REGISTRO (ODIN) ---")
+	fmt.println(msg.banner)
 
-	// 3. Solicitar y validar el índice
-	fmt.print(
-		"Introduce el índice (nasdaq, s&p, dow jones, russell, mini dax, micro dax, eurostoxx): ",
-	)
+	// 3. Prompt for and validate index selection
+	fmt.print(msg.prompt_market)
 	asset_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	asset_input := strings.to_lower(strings.trim_space(string(asset_bytes)))
 
 	contract, exists := market_database[asset_input]
 	if !exists {
-		fmt.println("❌ Mercado no soportado. Introduce uno de la lista.")
+		fmt.println(msg.unsupported_market)
 		return
 	}
 	fmt.printf(
-		"📌 Seleccionado: %s (%s) [Valor Punto: %.2f€]\n",
+		msg.selected_contract,
 		contract.name,
 		contract.ticker,
 		contract.point_value,
 	)
 
-	// 4. Solicitar tipo de operación
-	fmt.print("¿Dirección? Largos (L) o Cortos (C): ")
+	// 4. Prompt for order direction (Long vs Short)
+	fmt.print(msg.prompt_direction)
 	type_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
-	op_type := strings.to_upper(strings.trim_space(string(type_bytes)))
-	if op_type != "L" && op_type != "C" {return}
+	raw_dir := strings.to_upper(strings.trim_space(string(type_bytes)))
 
-	// 5. Solicitar número de contratos
-	fmt.print("Cantidad de contratos a operar: ")
+	is_long := (raw_dir == "L")
+	is_short := (raw_dir == "C" || raw_dir == "S")
+	if !is_long && !is_short {
+		return
+	}
+
+	op_type := "L" if is_long else (lang == .English ? "S" : "C")
+
+	// 5. Prompt for number of contracts
+	fmt.print(msg.prompt_qty)
 	num_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	contracts_qty, ok_qty := strconv.parse_int(strings.trim_space(string(num_bytes)))
-	if !ok_qty || contracts_qty <= 0 {return}
+	if !ok_qty || contracts_qty <= 0 {
+		return
+	}
 
-	// 6. Solicitar precios de entrada y salida
-	fmt.print("Precio de ENTRADA: ")
+	// 6. Prompt for entry and exit prices
+	fmt.print(msg.prompt_entry)
 	in_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	price_entry, ok_in := strconv.parse_f64(strings.trim_space(string(in_bytes)))
 
-	fmt.print("Precio de SALIDA: ")
+	fmt.print(msg.prompt_exit)
 	out_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	price_exit, ok_out := strconv.parse_f64(strings.trim_space(string(out_bytes)))
-	if !ok_in || !ok_out {return}
+	if !ok_in || !ok_out {
+		return
+	}
 
-	// 7. CÁLCULOS MATEMÁTICOS DE FUTUROS
+	// 7. Mathematical calculations for futures PnL
 	points_pnl: f64 = 0.0
-	if op_type == "L" {
+	if is_long {
 		points_pnl = price_exit - price_entry
 	} else {
 		points_pnl = price_entry - price_exit
 	}
 
-	// PnL Bruto = Puntos ganados/perdidos * Valor del punto entero * Número de contratos
+	// Gross PnL = Points gained/lost * Full point value * Contract count
 	gross_pnl := points_pnl * contract.point_value * f64(contracts_qty)
 
-	// Costes totales = Coste por lado (abrir + cerrar = 2) * contratos
+	// Total fees = Fee per side * 2 sides (open + close) * Contract count
 	total_costs := (contract.cost_per_side * 2.0) * f64(contracts_qty)
 
-	// PnL Neto = Bruto - Costes
+	// Net PnL = Gross PnL - Total fees
 	net_pnl := gross_pnl - total_costs
 
-	// 8. Mostrar en pantalla
-	fmt.println("\n-------------------------------------------")
-	fmt.printf("📊 RESULTADO NETO: %.2f €\n", net_pnl)
+	// 8. Display results on screen
+	fmt.printf(msg.net_result, net_pnl)
 	fmt.printf(
-		"💰 Beneficio Bruto: %.2f € | 💸 Comisiones pagadas: %.2f €\n",
+		msg.gross_and_costs,
 		gross_pnl,
 		total_costs,
 	)
-	fmt.println("-------------------------------------------")
 
-	// 9. ALMACENAR Y GUARDAR EN FICHERO
-	// Abrimos el archivo en modo Append (Añadir al final) u O_CREAT (crear si no existe)
+	// 9. Persist trade record to historical file
+	// Open file in append mode (create if it does not exist)
 	file_handle, err := os.open(
 		"historial_trading.txt",
 		os.O_WRONLY | os.O_CREATE | os.O_APPEND,
-		// 0o666,
 	)
 	if err != os.ERROR_NONE {
-		fmt.println("⚠️ No se pudo abrir el archivo para guardar la operación.")
+		fmt.println(msg.file_open_error)
 		return
 	}
 	defer os.close(file_handle)
 
-	// Formateamos la línea de texto que irá al fichero corporativo
+	// Format trade record line for persistence
 	log_line := fmt.tprintf(
-		"Mercado: %s | Tipo: %s | Contratos: %d | Entrada: %.2f | Salida: %.2f | PnL Neto: %.2f €\n",
+		msg.log_format,
 		contract.ticker,
 		op_type,
 		contracts_qty,
@@ -136,7 +242,7 @@ main :: proc() {
 		net_pnl,
 	)
 
-	// Escribimos en el archivo convirtiendo el string a un array de bytes
+	// Write log line to file
 	os.write(file_handle, transmute([]byte)log_line)
-	fmt.println("💾 ¡Operación registrada con éxito en 'historial_trading.txt'!")
+	fmt.println(msg.log_success)
 }
