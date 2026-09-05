@@ -8,6 +8,10 @@
 *.so
 *.dylib
 *.txt
+day-trade
+day-trade-tui
+day-trade-iup
+day-trade-gtk
 
 # Test binary, built with `go test -c`
 *.test
