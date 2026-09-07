@@ -32,8 +32,14 @@ Broker :: struct {
 	market_database: map[string]FutureContract,
 }
 
+// Account groups a trading account with its broker; more data will be added later
+Account :: struct {
+	name:   string,
+	broker: Broker,
+}
+
 // Creates the default broker, whose market database holds the supported indices
-get_default_broker :: proc(allocator := context.allocator) -> Broker {
+new_default_broker :: proc(allocator := context.allocator) -> Broker {
 	broker := Broker {
 		name            = "Default",
 		market_database = make(map[string]FutureContract, allocator),
@@ -66,6 +72,15 @@ get_default_broker :: proc(allocator := context.allocator) -> Broker {
 	broker.market_database["eurostoxx"] = FutureContract{"EuroStoxx", "FESX", 1, 10, 3.50}
 
 	return broker
+}
+
+// Creates the default account, holding the default broker and its market database
+new_default_account :: proc(allocator := context.allocator) -> Account {
+	account := Account {
+		name   = "Default",
+		broker = new_default_broker(allocator),
+	}
+	return account
 }
 
 // Mathematical calculations for futures PnL

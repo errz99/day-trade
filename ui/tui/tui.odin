@@ -76,9 +76,9 @@ run_tui :: proc() {
 	buffer: [1024]byte
 	bufio.reader_init_with_buf(&reader, os.to_stream(os.stdin), buffer[:])
 
-	// Get the default broker with its populated market database
-	broker := data.get_default_broker()
-	defer delete(broker.market_database)
+	// Get the default account with its broker and populated market database
+	account := data.new_default_account()
+	defer delete(account.broker.market_database)
 
 	fmt.println(msg.banner)
 
@@ -87,7 +87,7 @@ run_tui :: proc() {
 	asset_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	asset_input := strings.to_lower(strings.trim_space(string(asset_bytes)))
 
-	contract, exists := broker.market_database[asset_input]
+	contract, exists := account.broker.market_database[asset_input]
 	if !exists {
 		fmt.println(msg.unsupported_market)
 		return
