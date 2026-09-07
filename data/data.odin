@@ -29,16 +29,28 @@ TradeCalculation :: struct {
 	net_pnl:     f64,
 }
 
+// A finished trade registered in an account's history (mirrors what is logged
+// to historial_trading.txt); direction is kept semantically as is_long
+Trade :: struct {
+	ticker:   string, // market ticker (e.g., "MES")
+	is_long:  bool,   // trade direction: long or short
+	quantity: int,    // number of contracts traded
+	entry:    f64,    // entry price
+	exit:     f64,    // exit price
+	net_pnl:  f64,    // net result after commissions
+}
+
 // Broker groups a trading venue with its database of tradeable futures contracts
 Broker :: struct {
 	name:            string,
 	market_database: map[string]FutureContract,
 }
 
-// Account groups a trading account with its broker; more data will be added later
+// Account groups a trading account with its broker and its trade history
 Account :: struct {
 	name:   string,
 	broker: Broker,
+	trades: [dynamic]Trade,
 }
 
 // Data is the top-level application state; it will grow as more data is added.
@@ -91,6 +103,18 @@ new_default_account :: proc(allocator := context.allocator) -> Account {
 		broker = new_default_broker(allocator),
 	}
 	return account
+}
+
+// Appends a finished trade to the account's trade history
+record_trade :: proc(account: ^Account, ticker: string, is_long: bool, quantity: int, entry: f64, exit: f64, net_pnl: f64) {
+	append(&account.trades, Trade {
+		ticker   = ticker,
+		is_long  = is_long,
+		quantity = quantity,
+		entry    = entry,
+		exit     = exit,
+		net_pnl  = net_pnl,
+	})
 }
 
 // Creates the initial application data, holding the default account

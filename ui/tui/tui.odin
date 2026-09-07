@@ -158,7 +158,10 @@ run_tui :: proc() {
 	fmt.printf(msg.net_result, calc.net_pnl)
 	fmt.printf(msg.gross_and_costs, calc.gross_pnl, calc.total_costs)
 
-	// 7. Persist trade record to historical file via data package
+	// 7. Record the trade in the active account's history (persisted via data.json)
+	dt.record_trade(account, contract.ticker, is_long, contracts_qty, price_entry, price_exit, calc.net_pnl)
+
+	// 8. Persist trade record to historical file
 	log_line := fmt.tprintf(
 		msg.log_format,
 		contract.ticker,
