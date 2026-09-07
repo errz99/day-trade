@@ -1,6 +1,6 @@
 package tui
 
-import "../../data"
+import dt "../../data"
 import "core:bufio"
 import "core:fmt"
 import "core:os"
@@ -25,7 +25,7 @@ Messages :: struct {
 }
 
 // Returns localized messages for the specified language
-get_messages :: proc(lang: data.Language) -> Messages {
+get_messages :: proc(lang: dt.Language) -> Messages {
 	switch lang {
 	case .English:
 		return Messages {
@@ -68,7 +68,7 @@ run_tui :: proc() {
 	defer free_all(context.temp_allocator)
 
 	// Load language settings from configuration
-	lang := data.load_language_config("config.ini")
+	lang := dt.load_language_config("config.ini")
 	msg := get_messages(lang)
 
 	// Terminal input reader setup
@@ -76,9 +76,11 @@ run_tui :: proc() {
 	buffer: [1024]byte
 	bufio.reader_init_with_buf(&reader, os.to_stream(os.stdin), buffer[:])
 
-	// Get the default account with its broker and populated market database
-	account := data.new_default_account()
-	defer delete(account.broker.market_database)
+	// Create the initial application data holding the default account
+	data := dt.new_default_data()
+	defer dt.destroy_data(data)
+
+	account := data.accounts[0]
 
 	fmt.println(msg.banner)
 
@@ -128,7 +130,7 @@ run_tui :: proc() {
 	}
 
 	// 5. Mathematical calculations for futures PnL via data package
-	calc := data.calculate_trade(contract, is_long, contracts_qty, price_entry, price_exit)
+	calc := dt.calculate_trade(contract, is_long, contracts_qty, price_entry, price_exit)
 
 	// 6. Display results on screen
 	fmt.printf(msg.net_result, calc.net_pnl)
@@ -145,7 +147,7 @@ run_tui :: proc() {
 		calc.net_pnl,
 	)
 
-	if data.append_trade_log("historial_trading.txt", log_line) {
+	if dt.append_trade_log("historial_trading.txt", log_line) {
 		fmt.println(msg.log_success)
 	} else {
 		fmt.println(msg.file_open_error)

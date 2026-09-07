@@ -38,6 +38,11 @@ Account :: struct {
 	broker: Broker,
 }
 
+// Data is the top-level application state; it will grow as more data is added
+Data :: struct {
+	accounts: [dynamic]Account,
+}
+
 // Creates the default broker, whose market database holds the supported indices
 new_default_broker :: proc(allocator := context.allocator) -> Broker {
 	broker := Broker {
@@ -81,6 +86,23 @@ new_default_account :: proc(allocator := context.allocator) -> Account {
 		broker = new_default_broker(allocator),
 	}
 	return account
+}
+
+// Creates the initial application data, holding the default account
+new_default_data :: proc(allocator := context.allocator) -> Data {
+	trading_data := Data {
+		accounts = make([dynamic]Account, 0, 1, allocator),
+	}
+	append(&trading_data.accounts, new_default_account(allocator))
+	return trading_data
+}
+
+// Releases the resources owned by the given data (broker maps and the accounts array)
+destroy_data :: proc(trading_data: Data) {
+	for &account in trading_data.accounts {
+		delete(account.broker.market_database)
+	}
+	delete(trading_data.accounts)
 }
 
 // Mathematical calculations for futures PnL
