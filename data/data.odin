@@ -4,7 +4,6 @@ import "core:encoding/json"
 import "core:io"
 import "core:os"
 import "core:strconv"
-import "core:strings"
 
 // Structure definition for futures contracts
 FutureContract :: struct {
@@ -210,42 +209,6 @@ calculate_trade :: proc(
 		total_costs = total_costs,
 		net_pnl = net_pnl,
 	}
-}
-
-// Reads configuration file to determine language; defaults to Spanish and writes config.ini if missing
-load_language_config :: proc(filepath: string) -> Language {
-	data, err := os.read_entire_file(filepath, context.temp_allocator)
-	if err != os.ERROR_NONE {
-		default_config := "# Language configuration: \"en\" for English, \"es\" for Spanish\nlanguage = es\n"
-		_ = os.write_entire_file(filepath, transmute([]byte)default_config)
-		return .Spanish
-	}
-
-	content := string(data)
-	lines := strings.split_lines(content, context.temp_allocator)
-	for line in lines {
-		trimmed := strings.trim_space(line)
-		if len(trimmed) == 0 ||
-		   strings.has_prefix(trimmed, "#") ||
-		   strings.has_prefix(trimmed, ";") {
-			continue
-		}
-
-		parts := strings.split(trimmed, "=", context.temp_allocator)
-		if len(parts) == 2 {
-			key := strings.to_lower(strings.trim_space(parts[0]))
-			val := strings.to_lower(strings.trim_space(parts[1]))
-			if key == "language" || key == "lang" {
-				if strings.has_prefix(val, "en") {
-					return .English
-				} else if strings.has_prefix(val, "es") {
-					return .Spanish
-				}
-			}
-		}
-	}
-
-	return .Spanish
 }
 
 // Appends a trade log line to the specified file

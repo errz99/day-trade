@@ -20,7 +20,7 @@ Context :: struct {
 	app:        ^gtk.Application,
 	window:     ^gtk.Window,
 	data:       dt.Data,
-	lang:       dt.Language,
+	config:     dt.Config,
 	texts:      common.Menu_Texts,
 	alloc:      mem.Allocator, // session arena allocator, restored inside "c" callbacks
 	temp_alloc: mem.Allocator,
@@ -76,8 +76,9 @@ on_button_clicked :: proc "c" (_: ^gtk.Widget, user_data: gio.Pointer) {
 
 	switch info.action {
 	case .Exit:
-		// End of the GUI session: persist the data and quit
+		// End of the GUI session: persist the data and the config, then quit
 		dt.save_data("data.json", ctx.data)
+		dt.save_config("config.json", ctx.config)
 		gio.application_quit(cast(^gio.Application)ctx.app)
 	case .Trade, .Results, .Account, .Config:
 		open_section_dialog(ctx, common.action_title(ctx.texts, info.action))
@@ -135,14 +136,15 @@ run_gtk :: proc() {
 	alloc := common.begin_session_arena(&session_arena)
 	defer mem.dynamic_arena_destroy(&session_arena)
 
-	// Load the application data at session start; fall back to defaults
+	// Load the application data and configuration (language) at session start;
+	// config is persisted again when the session ends
 	data := common.load_session_data("data.json")
+	cfg := dt.load_config("config.json")
 
-	lang := dt.load_language_config("config.ini")
 	ctx := Context {
 		data       = data,
-		lang       = lang,
-		texts      = common.get_menu_texts(lang),
+		config     = cfg,
+		texts      = common.get_menu_texts(cfg.language),
 		alloc      = alloc,
 		temp_alloc = context.temp_allocator,
 	}

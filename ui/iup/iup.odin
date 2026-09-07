@@ -12,7 +12,7 @@ import "core:strings"
 // it is set up in run_iup and stays valid for the whole main loop
 App_State :: struct {
 	data:       dt.Data,
-	lang:       dt.Language,
+	config:     dt.Config,
 	texts:      common.Menu_Texts,
 	main_dlg:   iup.Ihandle,
 	buttons:    [len(common.MENU_ACTIONS)]iup.Ihandle,
@@ -68,8 +68,9 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 
 	switch action {
 	case .Exit:
-		// End of the GUI session: persist the data and quit
+		// End of the GUI session: persist the data and the config, then quit
 		dt.save_data("data.json", _app.data)
+		dt.save_config("config.json", _app.config)
 		iup.IupHide(_app.main_dlg)
 		iup.IupExitLoop()
 	case .Trade, .Results, .Account, .Config:
@@ -78,13 +79,14 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	return iup.DEFAULT
 }
 
-// Closing the main window (X) also ends the session and persists the data
+// Closing the main window (X) also ends the session and persists data and config
 on_main_close :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
 	dt.save_data("data.json", _app.data)
+	dt.save_config("config.json", _app.config)
 	return iup.CLOSE
 }
 
@@ -95,14 +97,15 @@ run_iup :: proc() {
 	alloc := common.begin_session_arena(&session_arena)
 	defer mem.dynamic_arena_destroy(&session_arena)
 
-	// Load the application data at session start; fall back to defaults
+	// Load the application data and configuration (language) at session start;
+	// config is persisted again when the session ends
 	data := common.load_session_data("data.json")
+	cfg := dt.load_config("config.json")
 
-	lang := dt.load_language_config("config.ini")
 	_app = App_State {
 		data       = data,
-		lang       = lang,
-		texts      = common.get_menu_texts(lang),
+		config     = cfg,
+		texts      = common.get_menu_texts(cfg.language),
 		alloc      = alloc,
 		temp_alloc = context.temp_allocator,
 	}

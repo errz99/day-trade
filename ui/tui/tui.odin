@@ -74,8 +74,11 @@ run_tui :: proc() {
 	defer mem.dynamic_arena_destroy(&session_arena)
 	defer free_all(context.temp_allocator)
 
-	// Load language settings from configuration
-	lang := dt.load_language_config("config.ini")
+	// Load configuration (language) at session start; saved back at the end
+	cfg := dt.load_config("config.json")
+	defer dt.save_config("config.json", cfg)
+
+	lang := cfg.language
 	msg := get_messages(lang)
 
 	// Terminal input reader setup
