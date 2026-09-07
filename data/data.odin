@@ -3,7 +3,7 @@ package data
 import "core:os"
 import "core:strings"
 
-// 1. Structure definition for futures contracts
+// Structure definition for futures contracts
 FutureContract :: struct {
 	name:          string,
 	ticker:        string,
@@ -26,25 +26,46 @@ TradeCalculation :: struct {
 	net_pnl:     f64,
 }
 
-// Creates and populates the map of supported market indices
-get_market_database :: proc(allocator := context.allocator) -> map[string]FutureContract {
-	market_database := make(map[string]FutureContract, allocator)
+// Broker groups a trading venue with its database of tradeable futures contracts
+Broker :: struct {
+	name:            string,
+	market_database: map[string]FutureContract,
+}
 
-	market_database["nasdaq"] = FutureContract{"Micro E-mini Nasdaq 100", "MNQ", 0.25, 2.0, 0.60}
-	market_database["s&p"] = FutureContract{"Micro E-mini S&P 500", "MES", 0.25, 5.0, 0.60}
-	market_database["dow jones"] = FutureContract{"Micro E-mini Dow Jones", "MYM", 1.00, 0.5, 0.60}
-	market_database["russell"] = FutureContract{
+// Creates the default broker, whose market database holds the supported indices
+get_default_broker :: proc(allocator := context.allocator) -> Broker {
+	broker := Broker {
+		name            = "Default",
+		market_database = make(map[string]FutureContract, allocator),
+	}
+
+	broker.market_database["nasdaq"] = FutureContract {
+		"Micro E-mini Nasdaq 100",
+		"MNQ",
+		0.25,
+		2.0,
+		0.60,
+	}
+	broker.market_database["s&p"] = FutureContract{"Micro E-mini S&P 500", "MES", 0.25, 5.0, 0.60}
+	broker.market_database["dow jones"] = FutureContract {
+		"Micro E-mini Dow Jones",
+		"MYM",
+		1.00,
+		0.5,
+		0.60,
+	}
+	broker.market_database["russell"] = FutureContract {
 		"Micro E-mini Russell 2000",
 		"M2K",
 		0.10,
 		5.0,
 		0.60,
 	}
-	market_database["mini dax"] = FutureContract{"Mini Dax", "FDXM", 1, 5, 1.25}
-	market_database["micro dax"] = FutureContract{"Micro Dax", "FDXS", 1, 1, 0.75}
-	market_database["eurostoxx"] = FutureContract{"EuroStoxx", "FESX", 1, 10, 3.50}
+	broker.market_database["mini dax"] = FutureContract{"Mini Dax", "FDXM", 1, 5, 1.25}
+	broker.market_database["micro dax"] = FutureContract{"Micro Dax", "FDXS", 1, 1, 0.75}
+	broker.market_database["eurostoxx"] = FutureContract{"EuroStoxx", "FESX", 1, 10, 3.50}
 
-	return market_database
+	return broker
 }
 
 // Mathematical calculations for futures PnL
@@ -66,11 +87,11 @@ calculate_trade :: proc(
 	total_costs := (contract.cost_per_side * 2.0) * f64(contracts_qty)
 	net_pnl := gross_pnl - total_costs
 
-	return TradeCalculation{
-		points_pnl  = points_pnl,
-		gross_pnl   = gross_pnl,
+	return TradeCalculation {
+		points_pnl = points_pnl,
+		gross_pnl = gross_pnl,
 		total_costs = total_costs,
-		net_pnl     = net_pnl,
+		net_pnl = net_pnl,
 	}
 }
 
@@ -87,7 +108,9 @@ load_language_config :: proc(filepath: string) -> Language {
 	lines := strings.split_lines(content, context.temp_allocator)
 	for line in lines {
 		trimmed := strings.trim_space(line)
-		if len(trimmed) == 0 || strings.has_prefix(trimmed, "#") || strings.has_prefix(trimmed, ";") {
+		if len(trimmed) == 0 ||
+		   strings.has_prefix(trimmed, "#") ||
+		   strings.has_prefix(trimmed, ";") {
 			continue
 		}
 
@@ -110,10 +133,7 @@ load_language_config :: proc(filepath: string) -> Language {
 
 // Appends a trade log line to the specified file
 append_trade_log :: proc(filepath: string, log_line: string) -> bool {
-	file_handle, err := os.open(
-		filepath,
-		os.O_WRONLY | os.O_CREATE | os.O_APPEND,
-	)
+	file_handle, err := os.open(filepath, os.O_WRONLY | os.O_CREATE | os.O_APPEND)
 	if err != os.ERROR_NONE {
 		return false
 	}
