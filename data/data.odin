@@ -1,6 +1,9 @@
 package data
 
+import "core:encoding/json"
+import "core:io"
 import "core:os"
+import "core:strconv"
 import "core:strings"
 
 // Structure definition for futures contracts
@@ -38,9 +41,11 @@ Account :: struct {
 	broker: Broker,
 }
 
-// Data is the top-level application state; it will grow as more data is added
+// Data is the top-level application state; it will grow as more data is added.
+// active_account indexes the account currently in use
 Data :: struct {
-	accounts: [dynamic]Account,
+	accounts:       [dynamic]Account,
+	active_account: int,
 }
 
 // Creates the default broker, whose market database holds the supported indices
@@ -91,18 +96,69 @@ new_default_account :: proc(allocator := context.allocator) -> Account {
 // Creates the initial application data, holding the default account
 new_default_data :: proc(allocator := context.allocator) -> Data {
 	trading_data := Data {
-		accounts = make([dynamic]Account, 0, 1, allocator),
+		accounts       = make([dynamic]Account, 0, 1, allocator),
+		active_account = 0,
 	}
 	append(&trading_data.accounts, new_default_account(allocator))
 	return trading_data
 }
 
-// Releases the resources owned by the given data (broker maps and the accounts array)
-destroy_data :: proc(trading_data: Data) {
-	for &account in trading_data.accounts {
-		delete(account.broker.market_database)
+// Custom float marshaler: writes the shortest round-trip representation
+// (e.g. 2.0 -> "2", 0.60 -> "0.6") instead of the full 16-decimal form
+_json_marshalers: map[typeid]json.User_Marshaler
+_json_marshalers_ready := false
+
+marshal_f64 :: proc(w: io.Writer, v: any, opt: ^json.Marshal_Options) -> json.Marshal_Error {
+	buf: [64]byte
+	s := strconv.write_float(buf[:], v.(f64), 'g', -1, 64)
+	// write_float always emits a sign; JSON numbers cannot carry a leading '+'
+	if len(s) > 0 && s[0] == '+' {
+		s = s[1:]
 	}
-	delete(trading_data.accounts)
+	io.write_string(w, s) or_return
+	return nil
+}
+
+_init_json_marshalers :: proc() {
+	if _json_marshalers_ready {
+		return
+	}
+	json.set_user_marshalers(&_json_marshalers)
+	_ = json.register_user_marshaler(typeid_of(f64), marshal_f64)
+	_json_marshalers_ready = true
+}
+
+// Saves the given Data to filepath in JSON format, with map keys sorted and
+// floats written in their shortest form
+save_data :: proc(filepath: string, trading_data: Data, allocator := context.allocator) -> bool {
+	_init_json_marshalers()
+
+	json_bytes, err := json.marshal(
+		trading_data,
+		{sort_maps_by_key = true},
+		allocator=allocator,
+	)
+	if err != nil {
+		return false
+	}
+	defer delete(json_bytes)
+
+	return os.write_entire_file(filepath, json_bytes) == os.ERROR_NONE
+}
+
+// Loads Data from a JSON file; returns false when the file is missing or cannot be parsed
+load_data :: proc(filepath: string, allocator := context.allocator) -> (Data, bool) {
+	content, err := os.read_entire_file(filepath, allocator)
+	if err != os.ERROR_NONE {
+		return Data{}, false
+	}
+	defer delete(content)
+
+	trading_data: Data
+	if json_err := json.unmarshal(content, &trading_data, allocator=allocator); json_err != nil {
+		return Data{}, false
+	}
+	return trading_data, true
 }
 
 // Mathematical calculations for futures PnL

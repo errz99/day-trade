@@ -3,6 +3,7 @@ package tui
 import dt "../../data"
 import "core:bufio"
 import "core:fmt"
+import "core:mem"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -65,6 +66,13 @@ get_messages :: proc(lang: dt.Language) -> Messages {
 
 // Runs the terminal user interface flow
 run_tui :: proc() {
+	// Session memory: a dynamic arena holds everything allocated this run (including the
+	// JSON data loaded at start) and is released wholesale when the session ends
+	session_arena: mem.Dynamic_Arena
+	mem.dynamic_arena_init(&session_arena)
+	session_alloc := mem.dynamic_arena_allocator(&session_arena)
+	context.allocator = session_alloc
+	defer mem.dynamic_arena_destroy(&session_arena)
 	defer free_all(context.temp_allocator)
 
 	// Load language settings from configuration
@@ -76,11 +84,25 @@ run_tui :: proc() {
 	buffer: [1024]byte
 	bufio.reader_init_with_buf(&reader, os.to_stream(os.stdin), buffer[:])
 
-	// Create the initial application data holding the default account
-	data := dt.new_default_data()
-	defer dt.destroy_data(data)
+	// Load the application data at session start; fall back to defaults when there is no saved file
+	data: dt.Data
+	if loaded_data, ok := dt.load_data("data.json"); ok {
+		data = loaded_data
+	} else {
+		data = dt.new_default_data()
+	}
+	if len(data.accounts) == 0 {
+		data = dt.new_default_data()
+	}
+	if data.active_account < 0 || data.active_account >= len(data.accounts) {
+		data.active_account = 0
+	}
 
-	account := data.accounts[0]
+	// The session always ends by persisting the current data back to the JSON file
+	defer dt.save_data("data.json", data)
+
+	// Pointer to the active account, so it can be modified directly in place
+	account := &data.accounts[data.active_account]
 
 	fmt.println(msg.banner)
 
