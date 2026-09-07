@@ -1,5 +1,6 @@
 package iup_ui
 
+import common "../common"
 import dt "../../data"
 import iup "../../lib/iup"
 import runtime "base:runtime"
@@ -7,75 +8,14 @@ import "core:fmt"
 import "core:mem"
 import "core:strings"
 
-// Localized texts for the main menu window (mirrors the GTK UI)
-Menu_Texts :: struct {
-	account: cstring, // Account / Cuenta
-	trade:   cstring, // Trade / Operar
-	results: cstring, // Results / Resultados
-	config:  cstring, // Config
-	exit:    cstring, // Exit / Salida
-	pending: cstring, // placeholder hint shown in not-yet-implemented dialogs
-}
-
-get_menu_texts :: proc(lang: dt.Language) -> Menu_Texts {
-	switch lang {
-	case .English:
-		return Menu_Texts {
-			account = cstring("Account"),
-			trade = cstring("Trade"),
-			results = cstring("Results"),
-			config = cstring("Config"),
-			exit = cstring("Exit"),
-			pending = cstring("Not implemented yet"),
-		}
-	case .Spanish:
-		return Menu_Texts {
-			account = cstring("Cuenta"),
-			trade = cstring("Operar"),
-			results = cstring("Resultados"),
-			config = cstring("Config"),
-			exit = cstring("Salida"),
-			pending = cstring("Aún no implementado"),
-		}
-	}
-	return {}
-}
-
-// Menu action carried by each of the main window buttons
-MenuAction :: enum {
-	Trade,
-	Results,
-	Account,
-	Config,
-	Exit,
-}
-
-MENU_ACTIONS := [?]MenuAction{.Trade, .Results, .Account, .Config, .Exit}
-
-action_title :: proc(texts: Menu_Texts, action: MenuAction) -> cstring {
-	switch action {
-	case .Trade:
-		return texts.trade
-	case .Results:
-		return texts.results
-	case .Account:
-		return texts.account
-	case .Config:
-		return texts.config
-	case .Exit:
-		return texts.exit
-	}
-	return ""
-}
-
 // IUP callbacks carry no user data, so the UI state lives at package level;
 // it is set up in run_iup and stays valid for the whole main loop
 App_State :: struct {
 	data:       dt.Data,
 	lang:       dt.Language,
-	texts:      Menu_Texts,
+	texts:      common.Menu_Texts,
 	main_dlg:   iup.Ihandle,
-	buttons:    [len(MENU_ACTIONS)]iup.Ihandle,
+	buttons:    [len(common.MENU_ACTIONS)]iup.Ihandle,
 	alloc:      mem.Allocator, // session arena allocator, restored inside "c" callbacks
 	temp_alloc: mem.Allocator,
 }
@@ -118,10 +58,10 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
-	action := MenuAction.Exit
-	for _, i in MENU_ACTIONS {
+	action := common.MenuAction.Exit
+	for _, i in common.MENU_ACTIONS {
 		if _app.buttons[i] == ih {
-			action = MENU_ACTIONS[i]
+			action = common.MENU_ACTIONS[i]
 			break
 		}
 	}
@@ -133,7 +73,7 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 		iup.IupHide(_app.main_dlg)
 		iup.IupExitLoop()
 	case .Trade, .Results, .Account, .Config:
-		open_section_dialog(action_title(_app.texts, action))
+		open_section_dialog(common.action_title(_app.texts, action))
 	}
 	return iup.DEFAULT
 }
@@ -152,30 +92,18 @@ run_iup :: proc() {
 	// Session memory: a dynamic arena holds everything allocated this run
 	// (including the JSON data loaded at start) and is freed when the app quits
 	session_arena: mem.Dynamic_Arena
-	mem.dynamic_arena_init(&session_arena)
-	context.allocator = mem.dynamic_arena_allocator(&session_arena)
+	alloc := common.begin_session_arena(&session_arena)
 	defer mem.dynamic_arena_destroy(&session_arena)
 
 	// Load the application data at session start; fall back to defaults
-	data: dt.Data
-	if loaded, ok := dt.load_data("data.json"); ok {
-		data = loaded
-	} else {
-		data = dt.new_default_data()
-	}
-	if len(data.accounts) == 0 {
-		data = dt.new_default_data()
-	}
-	if data.active_account < 0 || data.active_account >= len(data.accounts) {
-		data.active_account = 0
-	}
+	data := common.load_session_data("data.json")
 
 	lang := dt.load_language_config("config.ini")
 	_app = App_State {
 		data       = data,
 		lang       = lang,
-		texts      = get_menu_texts(lang),
-		alloc      = mem.dynamic_arena_allocator(&session_arena),
+		texts      = common.get_menu_texts(lang),
+		alloc      = alloc,
 		temp_alloc = context.temp_allocator,
 	}
 
@@ -188,9 +116,9 @@ run_iup :: proc() {
 	account_label := make_label(strings.clone_to_cstring(account_title))
 
 	// 2. Column of menu buttons, each launching its own dialog
-	buttons: [len(MENU_ACTIONS)]iup.Ihandle
-	for action, i in MENU_ACTIONS {
-		button := iup.IupButton(action_title(_app.texts, action), nil)
+	buttons: [len(common.MENU_ACTIONS)]iup.Ihandle
+	for action, i in common.MENU_ACTIONS {
+		button := iup.IupButton(common.action_title(_app.texts, action), nil)
 		iup.IupSetAttribute(button, "EXPAND", "HORIZONTAL")
 		buttons[i] = button
 	}

@@ -1,5 +1,6 @@
 package tui
 
+import common "../common"
 import dt "../../data"
 import "core:bufio"
 import "core:fmt"
@@ -69,9 +70,7 @@ run_tui :: proc() {
 	// Session memory: a dynamic arena holds everything allocated this run (including the
 	// JSON data loaded at start) and is released wholesale when the session ends
 	session_arena: mem.Dynamic_Arena
-	mem.dynamic_arena_init(&session_arena)
-	session_alloc := mem.dynamic_arena_allocator(&session_arena)
-	context.allocator = session_alloc
+	common.begin_session_arena(&session_arena)
 	defer mem.dynamic_arena_destroy(&session_arena)
 	defer free_all(context.temp_allocator)
 
@@ -84,19 +83,8 @@ run_tui :: proc() {
 	buffer: [1024]byte
 	bufio.reader_init_with_buf(&reader, os.to_stream(os.stdin), buffer[:])
 
-	// Load the application data at session start; fall back to defaults when there is no saved file
-	data: dt.Data
-	if loaded_data, ok := dt.load_data("data.json"); ok {
-		data = loaded_data
-	} else {
-		data = dt.new_default_data()
-	}
-	if len(data.accounts) == 0 {
-		data = dt.new_default_data()
-	}
-	if data.active_account < 0 || data.active_account >= len(data.accounts) {
-		data.active_account = 0
-	}
+	// Load the application data at session start (defaults when there is no saved file)
+	data := common.load_session_data("data.json")
 
 	// The session always ends by persisting the current data back to the JSON file
 	defer dt.save_data("data.json", data)

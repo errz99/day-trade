@@ -1,5 +1,6 @@
 package gtk_ui
 
+import common "../common"
 import dt "../../data"
 import gio "../../lib/gtk4/glib/gio"
 import gtk "../../lib/gtk4/gtk"
@@ -8,54 +9,9 @@ import "core:mem"
 import "core:strings"
 import runtime "base:runtime"
 
-// Localized texts for the main menu window
-Menu_Texts :: struct {
-	account: cstring, // Account / Cuenta
-	trade:   cstring, // Trade / Operar
-	results: cstring, // Results / Resultados
-	config:  cstring, // Config
-	exit:    cstring, // Exit / Salida
-	pending: cstring, // placeholder hint shown in not-yet-implemented dialogs
-}
-
-get_menu_texts :: proc(lang: dt.Language) -> Menu_Texts {
-	switch lang {
-	case .English:
-		return Menu_Texts {
-			account = cstring("Account"),
-			trade   = cstring("Trade"),
-			results = cstring("Results"),
-			config  = cstring("Config"),
-			exit    = cstring("Exit"),
-			pending = cstring("Not implemented yet"),
-		}
-	case .Spanish:
-		return Menu_Texts {
-			account = cstring("Cuenta"),
-			trade   = cstring("Operar"),
-			results = cstring("Resultados"),
-			config  = cstring("Config"),
-			exit    = cstring("Salida"),
-			pending = cstring("Aún no implementado"),
-		}
-	}
-	return {}
-}
-
-// Menu action carried by each of the main window buttons
-MenuAction :: enum {
-	Trade,
-	Results,
-	Account,
-	Config,
-	Exit,
-}
-
-MENU_ACTIONS :: [?]MenuAction{.Trade, .Results, .Account, .Config, .Exit}
-
 // Per-button payload: which action to run and the shared context it belongs to
 Button_Info :: struct {
-	action: MenuAction,
+	action: common.MenuAction,
 	ctx:    ^Context,
 }
 
@@ -65,21 +21,10 @@ Context :: struct {
 	window:     ^gtk.Window,
 	data:       dt.Data,
 	lang:       dt.Language,
-	texts:      Menu_Texts,
+	texts:      common.Menu_Texts,
 	alloc:      mem.Allocator, // session arena allocator, restored inside "c" callbacks
 	temp_alloc: mem.Allocator,
-	buttons:    [len(MENU_ACTIONS)]Button_Info,
-}
-
-action_title :: proc(texts: Menu_Texts, action: MenuAction) -> cstring {
-	switch action {
-	case .Trade:   return texts.trade
-	case .Results: return texts.results
-	case .Account: return texts.account
-	case .Config:  return texts.config
-	case .Exit:    return texts.exit
-	}
-	return ""
+	buttons:    [len(common.MENU_ACTIONS)]Button_Info,
 }
 
 // "c" callbacks have no implicit context; the first thing they must do is
@@ -135,7 +80,7 @@ on_button_clicked :: proc "c" (_: ^gtk.Widget, user_data: gio.Pointer) {
 		dt.save_data("data.json", ctx.data)
 		gio.application_quit(cast(^gio.Application)ctx.app)
 	case .Trade, .Results, .Account, .Config:
-		open_section_dialog(ctx, action_title(ctx.texts, info.action))
+		open_section_dialog(ctx, common.action_title(ctx.texts, info.action))
 	}
 }
 
@@ -169,11 +114,11 @@ on_activate :: proc "c" (_: ^gtk.Application, user_data: gio.Pointer) {
 	gtk.box_append(cast(^gtk.Box)root, account_label)
 
 	// 2. Column of menu buttons, each launching its own dialog
-	for action, i in MENU_ACTIONS {
+	for action, i in common.MENU_ACTIONS {
 		ctx.buttons[i].action = action
 		ctx.buttons[i].ctx = ctx
 
-		button := gtk.button_new_with_label(action_title(ctx.texts, action))
+		button := gtk.button_new_with_label(common.action_title(ctx.texts, action))
 		gtk.widget_set_hexpand(button, true)
 		gtk.box_append(cast(^gtk.Box)root, button)
 		gio.signal_connect(button, "clicked", on_button_clicked, gio.Pointer(&ctx.buttons[i]))
@@ -187,30 +132,18 @@ run_gtk :: proc() {
 	// Session memory: a dynamic arena holds everything allocated this run
 	// (including the JSON data loaded at start) and is freed when the app quits
 	session_arena: mem.Dynamic_Arena
-	mem.dynamic_arena_init(&session_arena)
-	context.allocator = mem.dynamic_arena_allocator(&session_arena)
+	alloc := common.begin_session_arena(&session_arena)
 	defer mem.dynamic_arena_destroy(&session_arena)
 
 	// Load the application data at session start; fall back to defaults
-	data: dt.Data
-	if loaded, ok := dt.load_data("data.json"); ok {
-		data = loaded
-	} else {
-		data = dt.new_default_data()
-	}
-	if len(data.accounts) == 0 {
-		data = dt.new_default_data()
-	}
-	if data.active_account < 0 || data.active_account >= len(data.accounts) {
-		data.active_account = 0
-	}
+	data := common.load_session_data("data.json")
 
 	lang := dt.load_language_config("config.ini")
 	ctx := Context {
 		data       = data,
 		lang       = lang,
-		texts      = get_menu_texts(lang),
-		alloc      = mem.dynamic_arena_allocator(&session_arena),
+		texts      = common.get_menu_texts(lang),
+		alloc      = alloc,
 		temp_alloc = context.temp_allocator,
 	}
 	for &b in ctx.buttons {
