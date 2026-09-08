@@ -110,7 +110,7 @@ foreign gtk {
 	alert_dialog_set_default_button :: proc(self: ^AlertDialog, button: c.int) ---
 	alert_dialog_set_detail :: proc(self: ^AlertDialog, detail: cstring) ---
 	alert_dialog_set_message :: proc(self: ^AlertDialog, message: cstring) ---
-	alert_dialog_set_modal :: proc(self: ^AlertDialog, modal: bool) ---
+	alert_dialog_set_modal :: proc(self: ^AlertDialog, modal: b32) ---
 	alert_dialog_show :: proc(self: ^AlertDialog, parent: ^Window) ---
 	alert_dialog_choose :: proc(self: ^AlertDialog, parent: ^Window, cancellable: ^g.Cancellable, callback: g.AsyncReadyCallback, data: g.Pointer) ---
 	alert_dialog_choose_finish :: proc(self: ^AlertDialog, result: ^g.AsyncResult, error: ^glib.Error) ---
@@ -132,12 +132,12 @@ foreign gtk {
 
 	// GtkGesture
 	gesture_click_new :: proc() -> ^Gesture ---
-	gesture_single_set_button :: proc(gesture: ^GestureSingle, button: c.uint) -> ^Gesture ---
+	gesture_single_set_button :: proc(gesture: ^GestureSingle, button: c.uint) ---
 
 	// GtkWidget
 	widget_add_controller :: proc(widget: ^Widget, controller: ^EventController) ---
 	widget_contains :: proc(widget: ^Widget, x, y: c.double) -> bool ---
-	widget_grab_focus :: proc(widget: ^Widget) -> bool ---
+	widget_grab_focus :: proc(widget: ^Widget) ---
 	widget_has_focus :: proc(widget: ^Widget) -> bool ---
 	widget_hide :: proc(widget: ^Widget) ---
 	widget_is_sensitive :: proc(widget: ^Widget) -> bool ---
@@ -154,10 +154,14 @@ foreign gtk {
 	widget_get_size_request :: proc(widget: ^Widget, width, height: ^c.int) ---
 	widget_get_visible :: proc(widget: ^Widget) -> bool ---
 
-	widget_set_can_focus :: proc(widget: ^Widget, focus: bool) ---
+	// NOTE: boolean parameters are gboolean in C (4-byte int), so they are
+	// declared as b32 instead of Odin's 1-byte bool to avoid garbage in the
+	// upper bytes when passing false. Return values can stay as bool (GTK
+	// always returns exactly TRUE(1)/FALSE(0)).
+	widget_set_can_focus :: proc(widget: ^Widget, focus: b32) ---
 	// widget_set_cursor :: proc(widget: ^Widget, cursor: gdk.Cursor) ---
 	widget_set_cursor_from_name :: proc(widget: ^Widget, name: cstring) ---
-	widget_set_focusable :: proc(widget: ^Widget, focusable: bool) ---
+	widget_set_focusable :: proc(widget: ^Widget, focusable: b32) ---
 	widget_set_name :: proc(widget: ^Widget, name: cstring) ---
 	widget_set_margin_top :: proc(widget: ^Widget, margin: c.int) ---
 	widget_set_margin_bottom :: proc(widget: ^Widget, margin: c.int) ---
@@ -165,17 +169,17 @@ foreign gtk {
 	widget_set_margin_end :: proc(widget: ^Widget, margin: c.int) ---
 	widget_set_halign :: proc(widget: ^Widget, align: Align) ---
 	widget_set_valign :: proc(widget: ^Widget, align: Align) ---
-	widget_set_hexpand :: proc(widget: ^Widget, expand: bool) ---
-	widget_set_vexpand :: proc(widget: ^Widget, expand: bool) ---
+	widget_set_hexpand :: proc(widget: ^Widget, expand: b32) ---
+	widget_set_vexpand :: proc(widget: ^Widget, expand: b32) ---
 	widget_set_size_request :: proc(widget: ^Widget, width, height: c.int) ---
-	widget_set_sensitive :: proc(widget: ^Widget, sensitive: bool) ---
-	widget_set_visible :: proc(widget: ^Widget, visible: bool) ---
+	widget_set_sensitive :: proc(widget: ^Widget, sensitive: b32) ---
+	widget_set_visible :: proc(widget: ^Widget, visible: b32) ---
 	widget_set_parent :: proc(widget: ^Widget, parent: ^Widget) ---
 
 	// GtkApplicationWindow
 	application_window_new :: proc(application: ^Application) -> ^Widget ---
 	application_window_get_show_menubar :: proc(app_window: ^ApplicationWindow) -> bool ---
-	application_window_set_show_menubar :: proc(app_window: ^ApplicationWindow, show: bool) ---
+	application_window_set_show_menubar :: proc(app_window: ^ApplicationWindow, show: b32) ---
 
 	// GtkPopoverMenu
 	popover_menu_new_from_model :: proc(model: ^g.MenuModel) -> ^Widget ---
@@ -185,12 +189,12 @@ foreign gtk {
 	popover_present :: proc(popover: ^Popover) ---
 	popover_popup :: proc(popover: ^Popover) ---
 	popover_popdown :: proc(popover: ^Popover) ---
-	popover_set_autohide :: proc(popover: ^Popover, autohide: bool) ---
-	popover_set_cascade_popdown :: proc(popover: ^Popover, cascade: bool) ---
+	popover_set_autohide :: proc(popover: ^Popover, autohide: b32) ---
+	popover_set_cascade_popdown :: proc(popover: ^Popover, cascade: b32) ---
 	popover_set_child :: proc(popover: ^Popover, child: ^Widget) ---
 	popover_set_default_widget :: proc(popover: ^Popover, widget: ^Widget) ---
-	popover_set_mnemonics_visible :: proc(popover: ^Popover, visible: bool) ---
-	popover_set_has_arrow :: proc(popover: ^Popover, has_arrow: bool) ---
+	popover_set_mnemonics_visible :: proc(popover: ^Popover, visible: b32) ---
+	popover_set_has_arrow :: proc(popover: ^Popover, has_arrow: b32) ---
 	popover_set_offset :: proc(popover: ^Popover, x_offset, y_offset: c.int) ---
 	popover_set_position :: proc(popover: ^Popover, position: PositionType) ---
 	popover_set_pointing_to :: proc(popover: ^Popover, rect: ^gdk.Rectangle) ---
@@ -202,7 +206,7 @@ foreign gtk {
 	box_remove :: proc(box: ^Box, child: ^Widget) ---
 	box_reorder_child_after :: proc(box: ^Box, child, sibling: ^Widget) ---
 	box_get_homogeneous :: proc(box: ^Box) -> bool ---
-	box_set_homogeneous :: proc(box: ^Box, homogeneous: bool) ---
+	box_set_homogeneous :: proc(box: ^Box, homogeneous: b32) ---
 	box_set_spacing :: proc(box: ^Box, amount: c.int) ---
 	box_set_baseline_position :: proc(box: ^Box, position: BaselinePosition) ---
 
@@ -218,8 +222,12 @@ foreign gtk {
 	check_button_new_with_label :: proc(str: cstring) -> ^Widget ---
 	check_button_new_with_mnemonic :: proc(str: cstring) -> ^Widget ---
 	check_button_get_active :: proc(check_button: ^CheckButton) -> bool ---
-	check_button_set_active :: proc(check_button: ^CheckButton, active: bool) ---
+	// gboolean is a C int: use b32 so the value is passed in a full register
+	check_button_set_active :: proc(check_button: ^CheckButton, active: b32) ---
 	check_button_set_label :: proc(check_button: ^CheckButton, label: cstring) ---
+	// Group support: check buttons in the same group behave like radio buttons
+	// (GTK4 removed GtkRadioButton in favour of grouped check buttons)
+	check_button_set_group :: proc(check_button: ^CheckButton, group: ^CheckButton) ---
 
 	// GtkEntryBuffer
 	entry_buffer_new :: proc(initial_chars: cstring, n_initial_chars: c.int) -> ^EntryBuffer ---
@@ -241,8 +249,8 @@ foreign gtk {
 	grid_insert_row :: proc(grid: ^Grid, position: c.int) ---
 	grid_set_row_spacing :: proc(grid: ^Grid, spacing: c.uint) ---
 	grid_set_column_spacing :: proc(grid: ^Grid, spacing: c.uint) ---
-	grid_set_column_homogeneous :: proc(grid: ^Grid, homogeneous: bool) ---
-	grid_set_row_homogeneous :: proc(grid: ^Grid, homogeneous: bool) ---
+	grid_set_column_homogeneous :: proc(grid: ^Grid, homogeneous: b32) ---
+	grid_set_row_homogeneous :: proc(grid: ^Grid, homogeneous: b32) ---
 
 	// GtkLabel
 	label_new :: proc(str: cstring) -> ^Widget ---
@@ -260,7 +268,7 @@ foreign gtk {
 	window_unminimize :: proc(window: ^Window) ---
 	window_present :: proc(window: ^Window) ---
 
-	window_get_position :: proc(window: ^Window, x, y: ^c.int) ---
+	// window_get_position was removed from GTK4 (position is managed by the WM)
 	window_get_child :: proc(window: ^Window) -> ^Widget ---
 	window_get_decorated :: proc(window: ^Window) -> bool ---
 	window_get_default_widget :: proc(window: ^Window) -> ^Widget ---
@@ -268,14 +276,14 @@ foreign gtk {
 	window_is_fullscreen :: proc(window: ^Window) -> bool ---
 
 	window_get_title :: proc(window: ^Window) -> cstring ---
-	window_set_application :: proc(window: ^Window, application: ^Application) -> ^Window ---
+	window_set_application :: proc(window: ^Window, application: ^Application) ---
 	window_set_child :: proc(window: ^Window, child: ^Widget) ---
 	window_set_default_size :: proc(window: ^Window, width, height: c.int) ---
 	window_set_focus :: proc(window: ^Window, focus: ^Widget) ---
-	window_set_position :: proc(window: ^Window, x, y: c.int) ---
-	window_set_resizable :: proc(window: ^Window, resizable: bool) ---
-	window_set_modal :: proc(window: ^Window, modal: bool) ---
-	window_set_size :: proc(window: ^Window, width, height: c.int) ---
+	// window_set_position was removed from GTK4 (position is managed by the WM)
+	window_set_resizable :: proc(window: ^Window, resizable: b32) ---
+	window_set_modal :: proc(window: ^Window, modal: b32) ---
+	// window_set_size was removed from GTK4; use window_set_default_size instead
 	window_set_title :: proc(window: ^Window, title: cstring) ---
 	window_set_transient_for :: proc(window: ^Window, parent: ^Window) ---
 }

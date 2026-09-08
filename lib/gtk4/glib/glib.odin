@@ -4,6 +4,8 @@ import "core:c"
 
 Quark :: distinct c.uint32_t
 Pointer :: distinct rawptr
+// gboolean-returning C callbacks (GSourceFunc etc.) return exactly TRUE/FALSE,
+// so Odin's 1-byte bool is fine for reading the return value
 SourceFunc :: #type proc "c" (data: Pointer) -> bool
 
 Error :: struct {
@@ -28,7 +30,8 @@ VariantType :: distinct rawptr // GVariantType
 foreign glib {
 	// GVariant
 	variant_new :: proc(format_string: cstring) -> ^Variant ---
-	variant_new_boolean :: proc(variant: bool) -> ^Variant ---
+	// gboolean param: declared b32 (see gtk.odin note)
+	variant_new_boolean :: proc(variant: b32) -> ^Variant ---
 	variant_new_string :: proc(string: cstring) -> ^Variant ---
 	variant_type_new :: proc(type_string: cstring) -> ^VariantType ---
 	idle_add :: proc(function: SourceFunc, data: Pointer) -> c.uint ---

@@ -48,7 +48,7 @@ open_section_dialog :: proc(ctx: ^Context, title: cstring) {
 	gtk.window_set_title(dialog, title)
 	gtk.window_set_default_size(dialog, 320, 180)
 	gtk.window_set_transient_for(dialog, ctx.window)
-	gtk.window_set_modal(dialog, true)
+	gtk.window_set_modal(dialog, b32(true))
 
 	vbox := gtk.box_new(.Vertical, 8)
 	gtk.widget_set_margin_top(vbox, 24)
@@ -85,7 +85,9 @@ on_button_clicked :: proc "c" (_: ^gtk.Widget, user_data: gio.Pointer) {
 		dt.save_data("data.json", ctx.data)
 		dt.save_config("config.json", ctx.config)
 		gio.application_quit(cast(^gio.Application)ctx.app)
-	case .Trade, .Results, .Account, .Config:
+	case .Config:
+		open_config_dialog(ctx)
+	case .Trade, .Results, .Account:
 		open_section_dialog(ctx, common.action_title(ctx.texts, info.action))
 	}
 }
@@ -135,7 +137,7 @@ on_activate :: proc "c" (_: ^gtk.Application, user_data: gio.Pointer) {
 		ctx.buttons[i].ctx = ctx
 
 		button := gtk.button_new_with_label(common.action_title(ctx.texts, action))
-		gtk.widget_set_hexpand(button, true)
+		gtk.widget_set_hexpand(button, b32(true))
 		gtk.box_append(cast(^gtk.Box)root, button)
 		gio.signal_connect(button, "clicked", on_button_clicked, gio.Pointer(&ctx.buttons[i]))
 	}
