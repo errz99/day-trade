@@ -1,48 +1,15 @@
 package gtk_ui
 
+import adw "../../lib/gtk4/adwaita"
 import dt "../../data"
 import gio "../../lib/gtk4/glib/gio"
 import gtk "../../lib/gtk4/gtk"
 import common "../common"
 import runtime "base:runtime"
 import "core:c"
-import "core:dynlib"
 import "core:fmt"
 import "core:mem"
 import "core:strings"
-
-// ============================================================================
-// Optional Adwaita (libadwaita) support
-//
-// libadwaita is loaded on demand through core:dynlib so that the executable has
-// NO static dependency on it: Adwaita is only used when the config says so AND
-// the library is actually present on the system. If either condition fails the
-// app falls back to a plain GtkApplication.
-// ============================================================================
-
-// Keeps the loaded library alive for the whole run
-_adwaita_lib: dynlib.Library
-
-Adw_Application_New :: #type proc "c" (app_id: cstring, flags: gio.ApplicationFlags) -> gio.Pointer
-
-// DLL names to try (they vary depending on how the GTK4 runtime was built)
-ADWAITA_DLL_NAMES :: [?]string{"adwaita-1-0.dll", "libadwaita-1-0.dll", "libadwaita-1.dll"}
-
-// Attempts to load libadwaita and resolve adw_application_new
-load_adwaita :: proc() -> (Adw_Application_New, bool) {
-	for name in ADWAITA_DLL_NAMES {
-		lib, ok := dynlib.load_library(name)
-		if !ok do continue
-
-		proc_ptr, found := dynlib.symbol_address(lib, "adw_application_new")
-		if !found do continue
-
-		_adwaita_lib = lib
-		return cast(Adw_Application_New)proc_ptr, true
-	}
-	return nil, false
-}
-
 
 // Per-button payload: which action to run and the shared context it belongs to
 Button_Info :: struct {
@@ -200,15 +167,12 @@ run_gtk :: proc() {
 		b.ctx = &ctx
 	}
 
+	// Start with AdwApplication (Adwaita) or plain GtkApplication depending on
+	// the config; AdwApplication is a GtkApplication subclass, so the rest of
+	// the code works unchanged for either of them
 	app: ^gtk.Application
 	if cfg.use_adwaita {
-		// Adwaita requested: use libadwaita's AdwApplication when the library is
-		// available on the system; otherwise fall back to a plain GtkApplication
-		if adw_new, ok := load_adwaita(); ok {
-			app = cast(^gtk.Application)adw_new("com.daytrade.gtk", .DefaultFlags)
-		} else {
-			app = gtk.application_new("com.daytrade.gtk", .DefaultFlags)
-		}
+		app = cast(^gtk.Application)adw.application_new("com.daytrade.gtk", .DefaultFlags)
 	} else {
 		app = gtk.application_new("com.daytrade.gtk", .DefaultFlags)
 	}
