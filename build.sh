@@ -6,14 +6,21 @@ TARGET="${1:-tui}"
 build_target() {
     UI="$1"
     OUT="day-trade-${UI}"
-    
-    # Append .exe extension on Windows / MSYS / Cygwin environments
+
+    # GUI targets (iup/gtk) run as Windows applications on Windows/MSYS shells,
+    # so no console window appears; the tui stays a console application.
+    SUBSYS=""
     case "$(uname -s)" in
-        CYGWIN*|MINGW*|MSYS*) OUT="${OUT}.exe" ;;
+        CYGWIN*|MINGW*|MSYS*)
+            OUT="${OUT}.exe"
+            if [ "${UI}" = "iup" ] || [ "${UI}" = "gtk" ]; then
+                SUBSYS="-subsystem:windows"
+            fi
+            ;;
     esac
 
     echo "[BUILD] Compiling ${UI} -> ${OUT}"
-    odin build . -out:"${OUT}" -define:UI="${UI}"
+    odin build . -out:"${OUT}" -define:UI="${UI}" ${SUBSYS}
     echo "[OK] Successfully built ${OUT}"
 }
 

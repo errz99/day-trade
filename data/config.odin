@@ -4,15 +4,28 @@ import "core:encoding/json"
 import "core:os"
 import "core:strings"
 
+// Geometry of the main window: restored on startup and persisted on exit.
+// width/height are pixels; x/y are only meaningful when positioned is true
+// (GTK4 cannot manage window position, so there positioned stays false).
+Window_Geometry :: struct {
+	width:      int,
+	height:     int,
+	x:          int,
+	y:          int,
+	positioned: bool, // whether x/y hold a real saved position
+}
+
 // Application configuration, persisted as JSON (config.json)
 Config :: struct {
 	language: Language,
+	window:   Window_Geometry,
 }
 
 // Returns the configuration default when nothing has been saved yet
 default_config :: proc() -> Config {
 	return Config {
 		language = .Spanish,
+		window   = {},
 	}
 }
 

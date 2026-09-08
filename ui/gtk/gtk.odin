@@ -4,6 +4,7 @@ import common "../common"
 import dt "../../data"
 import gio "../../lib/gtk4/glib/gio"
 import gtk "../../lib/gtk4/gtk"
+import "core:c"
 import "core:fmt"
 import "core:mem"
 import "core:strings"
@@ -76,7 +77,10 @@ on_button_clicked :: proc "c" (_: ^gtk.Widget, user_data: gio.Pointer) {
 
 	switch info.action {
 	case .Exit:
-		// End of the GUI session: persist the data and the config, then quit
+		// End of the GUI session: persist data, window size and config, then quit.
+		// Position is not manageable from GTK4, so it stays untouched.
+		ctx.config.window.width = int(gtk.widget_get_width(cast(^gtk.Widget)ctx.window))
+		ctx.config.window.height = int(gtk.widget_get_height(cast(^gtk.Widget)ctx.window))
 		dt.save_data("data.json", ctx.data)
 		dt.save_config("config.json", ctx.config)
 		gio.application_quit(cast(^gio.Application)ctx.app)
@@ -95,7 +99,13 @@ on_activate :: proc "c" (_: ^gtk.Application, user_data: gio.Pointer) {
 	window := cast(^gtk.Window)gtk.application_window_new(ctx.app)
 	ctx.window = window
 	gtk.window_set_title(window, "Day Trade")
-	gtk.window_set_default_size(window, 320, 400)
+
+	// Restore the saved window size (GTK4 cannot manage window position)
+	if ctx.config.window.width > 0 && ctx.config.window.height > 0 {
+		gtk.window_set_default_size(window, cast(c.int)ctx.config.window.width, cast(c.int)ctx.config.window.height)
+	} else {
+		gtk.window_set_default_size(window, 320, 400)
+	}
 
 	root := gtk.box_new(.Vertical, 8)
 	gtk.widget_set_margin_top(root, 24)

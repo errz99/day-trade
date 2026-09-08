@@ -31,7 +31,14 @@ exit /b 0
 set "UI=%~1"
 set "OUT=day-trade-%UI%.exe"
 echo [BUILD] Compiling %UI% -^> %OUT%
-odin build . -out:%OUT% -define:UI="%UI%"
+
+rem GUI targets (iup/gtk) run as Windows applications so no console window
+rem appears; the tui stays a console application (default console subsystem).
+set "SUBSYS="
+if /i "%UI%"=="iup" set "SUBSYS=-subsystem:windows"
+if /i "%UI%"=="gtk" set "SUBSYS=-subsystem:windows"
+
+odin build . -out:%OUT% -define:UI="%UI%" %SUBSYS%
 if %ERRORLEVEL% neq 0 (
     echo [ERROR] Build failed for %UI%
     exit /b %ERRORLEVEL%

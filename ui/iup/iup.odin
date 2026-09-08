@@ -1,8 +1,8 @@
 package iup_ui
 
-import common "../common"
 import dt "../../data"
 import iup "../../lib/iup"
+import common "../common"
 import runtime "base:runtime"
 import "core:fmt"
 import "core:mem"
@@ -34,7 +34,8 @@ make_label :: proc(text: cstring) -> iup.Ihandle {
 	return label
 }
 
-// Opens a modal, transient-ish dialog window for a section (placeholder content)
+// Opens a dialog window for a section (placeholder content), centered on screen.
+// It is modeless and shown with IupShowXY; IUP cleans it up when it is closed.
 open_section_dialog :: proc(title: cstring) {
 	title_label := make_label(title)
 	pending_label := make_label(_app.texts.pending)
@@ -47,9 +48,31 @@ open_section_dialog :: proc(title: cstring) {
 	iup.IupSetAttribute(dlg, "TITLE", title)
 	iup.IupSetAttribute(dlg, "SIZE", "320x160")
 
-	// modal until the user closes it
-	iup.IupPopup(dlg, iup.CENTER, iup.CENTER)
-	iup.IupDestroy(dlg)
+	iup.IupShowXY(dlg, iup.CENTER, iup.CENTER)
+}
+
+// IUP reports every move of the main window here, so the saved position is
+// always up to date and only needs persisting when the session ends
+on_main_move :: proc "c" (ih: iup.Ihandle, x: i32, y: i32) -> i32 {
+	context = runtime.default_context()
+	context.allocator = _app.alloc
+	context.temp_allocator = _app.temp_alloc
+
+	_app.config.window.x = int(x)
+	_app.config.window.y = int(y)
+	_app.config.window.positioned = true
+	return iup.DEFAULT
+}
+
+// IUP reports every resize of the main window here, keeping the saved size up to date
+on_main_resize :: proc "c" (ih: iup.Ihandle, width: i32, height: i32) -> i32 {
+	context = runtime.default_context()
+	context.allocator = _app.alloc
+	context.temp_allocator = _app.temp_alloc
+
+	_app.config.window.width = int(width)
+	_app.config.window.height = int(height)
+	return iup.DEFAULT
 }
 
 // Dispatches each button of the main menu by matching its handle
@@ -68,7 +91,8 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 
 	switch action {
 	case .Exit:
-		// End of the GUI session: persist the data and the config, then quit
+		// End of the GUI session: persist data and config (window geometry is
+		// already kept up to date by MOVE_CB / RESIZE_CB)
 		dt.save_data("data.json", _app.data)
 		dt.save_config("config.json", _app.config)
 		iup.IupHide(_app.main_dlg)
@@ -132,16 +156,36 @@ run_iup :: proc() {
 
 	dlg := iup.IupDialog(vbox)
 	iup.IupSetAttribute(dlg, "TITLE", "Day Trade")
-	iup.IupSetAttribute(dlg, "SIZE", "180x200")
+
+	// Restore the saved window size (position is applied via IupShowXY below)
+	if _app.config.window.width > 0 && _app.config.window.height > 0 {
+		iup.IupStoreAttribute(
+			dlg,
+			"CLIENTSIZE",
+			strings.clone_to_cstring(
+				fmt.tprintf("%dx%d", _app.config.window.width, _app.config.window.height),
+			),
+		)
+	} else {
+		iup.IupSetAttribute(dlg, "CLIENTSIZE", "180x200")
+	}
 
 	_app.main_dlg = dlg
 	_app.buttons = buttons
 
 	iup.IupSetCallback(dlg, "CLOSE_CB", on_main_close)
+	iup.IupSetCallback(dlg, "MOVE_CB", cast(iup.Icallback)on_main_move)
+	iup.IupSetCallback(dlg, "RESIZE_CB", cast(iup.Icallback)on_main_resize)
 	for i in 0 ..< len(buttons) {
 		iup.IupSetCallback(buttons[i], "ACTION", on_button_action)
 	}
 
-	iup.IupShow(dlg)
+	// Show the window at its saved position, or centered when none is stored
+	geometry := _app.config.window
+	if geometry.positioned {
+		iup.IupShowXY(dlg, cast(i32)geometry.x, cast(i32)geometry.y)
+	} else {
+		iup.IupShowXY(dlg, iup.CENTER, iup.CENTER)
+	}
 	iup.IupMainLoop()
 }
