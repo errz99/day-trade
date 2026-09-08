@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Manifest de la aplicación "Day Trade" (versión WinForms).
+     Un manifest es un documento que Windows lee al lanzar el .exe para saber
+     qué funcionalidades activar (estilos visuales, DPI, privilegios, etc.).
+     Este fichero se incrusta dentro del ejecutable en el build (ver build.ps1
+     y tools/embed_manifest). -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3">
+  <!-- Identidad del ensamblado: quién es esta aplicación. -->
+  <assemblyIdentity
+      version="3.0.0.0"
+      processorArchitecture="amd64"
+      name="day-trade-winforms.exe"
+      type="win32"
+  />
+  <!-- Descripción visible en propiedades/detalles de la aplicación. -->
+  <description>Day Trade WinForms</description>
+  <dependency>
+      <!-- Common-Controls 6.0: activa los estilos visuales modernos
+           (botones/controles con el tema del sistema y bordes redondeados). -->
+      <dependentAssembly>
+          <assemblyIdentity
+              type="win32"
+              name="Microsoft.Windows.Common-Controls"
+              version="6.0.0.0"
+              processorArchitecture="amd64"
+              publicKeyToken="6595b64144ccf1df"
+              language="*"
+          />
+      </dependentAssembly>
+  </dependency>
+  <asmv3:application>
+    <asmv3:windowsSettings xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">
+      <!-- dpiAware true: la app no se "desenfoca" en pantallas con escala >100%
+           (Windows no la escalará por software). -->
+      <dpiAware>true</dpiAware>
+    </asmv3:windowsSettings>
+  </asmv3:application>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <!-- asInvoker: la app se ejecuta con los mismos permisos con los que se
+           lanzó (sin pedir "ejecutar como administrador"). -->
+      <requestedPrivileges>
+        <requestedExecutionLevel
+            level="asInvoker"
+            uiAccess="false"
+                />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <!-- Declara las versiones de Windows con las que la app es compatible. -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id="{1f676c76-80e1-4239-95bb-83d0f6d0da78}"/>
+      <!-- Windows Vista -->
+      <supportedOS Id="{e2011457-1546-43c5-a5fe-008deee3d3f0}"/>
+      <!-- Windows 7 -->
+      <supportedOS Id="{35138b9a-5d96-4fbd-8e2d-a2440225f93a}"/>
+      <!-- Windows 8 -->
+      <supportedOS Id="{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}"/>
+    </application>
+  </compatibility>
+</assembly>

@@ -1,0 +1,320 @@
+
+/*===========================================Button Docs=========================================================
+    Button struct
+        Constructor: new_button() -> ^Button
+        Properties:
+            All props from Control struct
+        Functions:
+			button_set_gradient_colors()
+
+        Events:
+			All events from Control struct
+        
+==============================================================================================================*/
+
+package winforms
+
+import "core:fmt"
+import "base:runtime"
+import "core:time"
+import api "core:sys/windows"
+
+transparent : i32 : 1
+_buttonCount : int = 1
+
+
+
+Button :: struct
+{
+	using control : Control,
+	style : ButtonStyle,
+	_drawNeeded : bool,
+	_fclrChanged, _bclr_changed : bool,
+	_fdraw : FlatDraw,
+	_gdraw : GradDraw,
+	_addedInDrawList : b64,
+	
+}
+
+// create new Button type
+new_button :: proc{new_button1, new_button2, new_button3, new_button4}
+
+// Set gradient colors for this button.
+button_set_gradient_colors :: proc(btn : ^Button, clr1, clr2 : uint)
+{
+	if (btn._drawFlag & 4) != 1 do btn._drawFlag += 4
+	gradDrawSetData(&btn._gdraw, clr1, clr2)
+    if btn._isCreated do InvalidateRect(btn.handle, nil, false)
+}
+
+//======================================================================Private Functions========================
+@private FlatDraw :: struct // To manage flat color button drawing
+{
+	defBrush : HBRUSH,
+	hotBrush : HBRUSH,
+	defPen : HPEN,
+	hotPen : HPEN,
+}
+
+@private GradColor :: struct
+{
+	c1 : Color,
+	c2 : Color,
+}
+
+@private GradDraw :: struct  // To manage gradient drawing
+{
+	gcDef : GradColor,
+	gcHot : GradColor,
+	defBrush : HBRUSH,
+	hotBrush : HBRUSH,
+	defPen : HPEN,
+	hotPen : HPEN,
+}
+
+@private flatDrawSetData :: proc(fd: ^FlatDraw, c: uint)
+{
+	fd.defBrush = get_solid_brush(c)
+	fd.hotBrush = CreateSolidBrush(change_color_get_ref(c, 1.2))
+	fd.defPen = CreatePen(PS_SOLID, 1, change_color_get_ref(c, 0.6))
+	fd.hotPen = CreatePen(PS_SOLID, 1, change_color_get_ref(c, 0.3))
+}
+
+@private flatDrawDtor :: proc(fd: FlatDraw)
+{
+	if fd.defBrush != nil do delete_gdi_object(fd.defBrush)
+	if fd.hotBrush != nil do delete_gdi_object(fd.hotBrush)
+	if fd.defPen != nil do delete_gdi_object(fd.defPen)
+	if fd.hotPen != nil do delete_gdi_object(fd.hotPen)
+	// print("flatdraw freed")
+}
+
+@private gradDrawSetData :: proc(gd: ^GradDraw, c1, c2: uint)
+{
+	gd.gcDef.c1 = new_color(c1)
+	gd.gcDef.c2 = new_color(c2)
+	hadj1: f64 = 1.5 if is_dark_color(gd.gcDef.c1) else 1.2
+	hadj2: f64 = 1.5 if is_dark_color(gd.gcDef.c2) else 1.2
+	gd.gcHot.c1 = change_color_rgb(gd.gcDef.c1, hadj1)
+	gd.gcHot.c2 = change_color_rgb(gd.gcDef.c2, hadj2)
+	gd.defPen = CreatePen(PS_SOLID, 1, change_color_get_ref(gd.gcDef.c1, 0.6))
+	gd.hotPen = CreatePen(PS_SOLID, 1, change_color_get_ref(gd.gcHot.c1, 0.3))
+}
+
+@private gradDrawDtor :: proc(gd: GradDraw)
+{
+	if gd.defBrush != nil do delete_gdi_object(gd.defBrush)
+	if gd.hotBrush != nil do delete_gdi_object(gd.hotBrush)
+	if gd.defPen != nil do delete_gdi_object(gd.defPen)
+	if gd.hotPen != nil do delete_gdi_object(gd.hotPen)
+}
+
+@private buttonCtor :: proc(p : ^Control, txt : string, x, y, w, h : i32) -> ^Button
+{
+	context = global_context
+	this := new(Button, context.allocator)
+	this.kind = .Button
+	control_base_init(this, p, x, y, w, h, &_buttonCount, txt)
+	this._createHandleProc = btn_create_handle
+	this._drawFlag = 0
+	return this
+}
+
+@private new_button1 :: proc(parent : ^Control) -> ^Button
+{
+	this := buttonCtor(parent, "", 10, 10, 120, 35)
+	if this._ownerForm.createChilds do create_control(this)
+	return this
+}
+
+@private new_button2 :: proc(parent : ^Control, txt : string) -> ^Button
+{
+	this := buttonCtor(parent, txt, 10, 10, 120, 35)
+	if this._ownerForm.createChilds do create_control(this)
+	return this
+}
+
+@private new_button3 :: proc(parent : ^Control, txt : string, x, y : i32) -> ^Button
+{
+	this := buttonCtor(parent, txt, x, y, 120, 35)
+	if this._ownerForm.createChilds do create_control(this)
+	return this
+}
+
+@private new_button4 :: proc(parent : ^Control, txt : string, x, y, w, h: i32) -> ^Button
+{
+	this := buttonCtor(parent, txt, x, y, w, h)
+	if this._ownerForm.createChilds do create_control(this)
+	return this
+}
+
+@private btn_create_handle :: proc(ctl: ^Control)
+{
+	this := cast(^Button)ctl
+	if this._drawFlag > 0 do check_initial_color_change(this)	
+	create_control(ctl, this.width, this.height)
+	set_subclass(this, btn_wnd_proc)	
+}
+
+@private check_initial_color_change :: proc(btn : ^Button)
+{
+	// There is a chance to user set back/fore color just before creating handle.
+	// In that case, we need to check for color changes.
+	// if btn.foreColor.value != btn.parent.foreColor.value do btn._drawFlag += 1
+	if btn.backColor != btn.parent.backColor {
+		flatDrawSetData(&btn._fdraw, btn.backColor)
+	}
+}
+
+@private set_fore_color_internal :: proc(btn : ^Button, ncd : ^NMCUSTOMDRAW) -> LRESULT
+{
+	SetTextColor(ncd.hdc, get_color_ref(btn.foreColor))
+	api.SetBkMode(ncd.hdc, api.BKMODE.TRANSPARENT)
+	DrawText(ncd.hdc, btn._wtext.ptr, -1, &ncd.rc, txtFlag)
+	return CDRF_NOTIFYPOSTPAINT	
+}
+
+@private set_back_color_internal :: proc(btn : ^Button, nmcd : ^NMCUSTOMDRAW) -> LRESULT
+{
+	switch nmcd.dwDrawStage
+	{
+		case CDDS_PREPAINT:
+			// We need to change color when user clicks the button with  mouse.
+			// But that is only working when we write code in pre-paint stage.
+			// It won't work in other stages.
+			if (nmcd.uItemState & MOUSE_CLICKED) == MOUSE_CLICKED {
+				paint_flat_button(nmcd.hdc, nmcd.rc, btn._fdraw.defBrush, btn._fdraw.hotPen)
+			} else if (nmcd.uItemState & MOUSE_OVER) == MOUSE_OVER 	{
+				paint_flat_button(nmcd.hdc, nmcd.rc, btn._fdraw.hotBrush, btn._fdraw.hotPen)
+			} else  {
+				paint_flat_button(nmcd.hdc, nmcd.rc, btn._fdraw.defBrush, btn._fdraw.defPen)
+			}
+			return  CDRF_DODEFAULT
+	}
+	return LRESULT(0)
+}
+
+@private paint_flat_button :: proc(hdc : HDC, rc : RECT, hbr: HBRUSH, pen: HPEN)
+{
+	SelectObject(hdc, toHGDI(hbr))
+	SelectObject(hdc, toHGDI(pen))
+	RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, ROUND_FACTOR, ROUND_FACTOR)
+	FillPath(hdc)
+}
+
+@private btn_forecolor_control :: proc(btn : ^ Button, clr : uint)
+{	// Public version of this function is in control.odin
+
+	if (btn._drawFlag & 1) != 1 do btn._drawFlag += 1
+	btn.foreColor = clr
+	if btn._isCreated do InvalidateRect(btn.handle, nil, false)
+}
+
+@private btn_backcolor_control :: proc(btn : ^Button, clr : uint)
+{  // Public version of this function is in control.odin
+	if (btn._drawFlag & 2) != 2 do btn._drawFlag += 2
+	btn.backColor = clr
+	flatDrawSetData(&btn._fdraw, btn.backColor)
+	if btn._isCreated {
+		InvalidateRect(btn.handle, nil, false)
+	}
+}
+
+@private draw_gradient_bkg :: proc(btn : ^Button, nmcd : ^NMCUSTOMDRAW) -> LRESULT
+{
+	switch nmcd.dwDrawStage
+	{
+		case CDDS_PREPAINT:
+			//draw_frame_gr(nmcd.hdc, nmcd.rc, btn._gradient_color.color1, -1, 1)
+			if (nmcd.uItemState & MOUSE_CLICKED) == MOUSE_CLICKED
+			{
+				paint_gradient_button(btn, nmcd.hdc, nmcd.rc, btn._gdraw.gcDef, btn._gdraw.defPen)
+			}
+			else if (nmcd.uItemState & MOUSE_OVER) == MOUSE_OVER
+			{	// color change when mouse is over the btn
+				paint_gradient_button(btn, nmcd.hdc, nmcd.rc, btn._gdraw.gcHot, btn._gdraw.hotPen)
+			}
+			else
+			{
+				paint_gradient_button(btn, nmcd.hdc, nmcd.rc, btn._gdraw.gcDef, btn._gdraw.defPen)
+			}
+	}
+	return CDRF_DODEFAULT
+}
+
+@private paint_gradient_button :: proc(btn: ^Button, hdc: HDC, rc: RECT, gc : GradColor, pen: HPEN)
+{
+	gr_brush : HBRUSH = create_gradient_brush(hdc, rc, gc.c1, gc.c2)
+	defer delete_gdi_object(gr_brush)
+	select_gdi_object(hdc, pen)
+	select_gdi_object(hdc, gr_brush)
+	RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, ROUND_FACTOR, ROUND_FACTOR)
+	FillPath(hdc)
+}
+
+@private btn_wmnotify_handler :: proc(btn: ^Button, lpm: LPARAM) -> LRESULT
+{
+	ret : LRESULT = CDRF_DODEFAULT
+	// print("draw flg ", btn._drawFlag)
+	if btn._drawFlag > 0
+	{
+		nmcd := dir_cast(lpm, ^NMCUSTOMDRAW)
+		switch btn._drawFlag
+		{
+			case 1: ret = set_fore_color_internal(btn, nmcd)
+			case 2: ret = set_back_color_internal(btn, nmcd)
+			case 3:
+				set_back_color_internal(btn, nmcd)
+				ret = set_fore_color_internal(btn, nmcd)
+			case 4: ret = draw_gradient_bkg(btn, nmcd)
+			case 5:
+				draw_gradient_bkg(btn, nmcd)
+				ret = set_fore_color_internal(btn, nmcd)
+		}
+	}
+	return ret
+}
+
+@private btn_finalize :: proc(this: ^Button)
+{
+	switch this._drawFlag {
+		case 2, 3: flatDrawDtor(this._fdraw)
+		case 4, 5: gradDrawDtor(this._gdraw)
+	}
+	control_base_dtor(this)
+	free(this,  context.allocator)
+}
+
+//mc : int = 1
+@private btn_wnd_proc :: proc "stdcall" (hw : HWND, msg : u32, wp : WPARAM, lp : LPARAM,
+									sc_id : UINT_PTR, ref_data : DWORD_PTR) -> LRESULT
+{
+	context = global_context
+	this := control_cast(Button, ref_data)
+	res := ctrl_common_msg_handler(this, hw, msg, wp, lp) 
+    #partial switch res {
+        case .Call_Def_Proc: return DefSubclassProc(hw, msg, wp, lp)
+        case .Immediate_Return: return 1
+    }
+	switch msg {
+		case WM_PAINT :			
+            if this.onPaint != nil {
+                ps : PAINTSTRUCT
+                hdc := BeginPaint(hw, &ps)
+                pea := new_paint_event_args(&ps)
+                this.onPaint(this, &pea)
+                EndPaint(hw, &ps)
+                return 0
+            }
+
+		case CM_NOTIFY:			
+			return btn_wmnotify_handler(this, lp)
+
+		case WM_NCDESTROY:			
+			RemoveWindowSubclass(this.handle, btn_wnd_proc, sc_id)
+			btn_finalize(this)					
+
+		case : return DefSubclassProc(hw, msg, wp, lp)
+	}
+	return DefSubclassProc(hw, msg, wp, lp)
+}
