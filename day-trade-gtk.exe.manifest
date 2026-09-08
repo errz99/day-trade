@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  
+  <description>Mi aplicación GTK4 para Windows</description>
+  
+  <!-- Habilitar controles visuales modernos -->
+  <dependency>
+    <dependentAssembly>
+      
+    </dependentAssembly>
+  </dependency>
+
+  <!-- Declaración de compatibilidad -->
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <!-- Windows 10 y Windows 11 -->
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}" />
+    </application>
+  </compatibility>
+
+  <!-- Nivel de nitidez en pantallas HiDPI (DPI Awareness) -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://microsoft.com">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://microsoft.com">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>

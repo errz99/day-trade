@@ -17,21 +17,25 @@ Window_Geometry :: struct {
 
 // Application configuration, persisted as JSON (config.json)
 Config :: struct {
-	language: Language,
-	window:   Window_Geometry,
+	language:    Language,
+	window:      Window_Geometry,
+	use_adwaita: bool, // enable the libadwaita (Adwaita) theme for GTK when available
 }
 
 // Returns the configuration default when nothing has been saved yet
 default_config :: proc() -> Config {
-	return Config {
-		language = .Spanish,
-		window   = {},
-	}
+	return Config{language = .Spanish, window = {}}
 }
 
 // One-time migration: reads the language from the legacy config.ini file when
 // no config.json exists yet. Returns ok = false when the file is missing.
-read_legacy_language_from_ini :: proc(filepath: string, allocator := context.allocator) -> (Language, bool) {
+read_legacy_language_from_ini :: proc(
+	filepath: string,
+	allocator := context.allocator,
+) -> (
+	Language,
+	bool,
+) {
 	content, err := os.read_entire_file(filepath, allocator)
 	if err != os.ERROR_NONE {
 		return .Spanish, false
@@ -71,14 +75,14 @@ load_config :: proc(filepath: string, allocator := context.allocator) -> Config 
 	if err != os.ERROR_NONE {
 		// No config.json yet: keep the language from the old config.ini if present
 		if lang, ok := read_legacy_language_from_ini("config.ini", allocator); ok {
-			return Config {language = lang}
+			return Config{language = lang}
 		}
 		return default_config()
 	}
 	defer delete(content)
 
 	cfg: Config
-	if json_err := json.unmarshal(content, &cfg, allocator=allocator); json_err != nil {
+	if json_err := json.unmarshal(content, &cfg, allocator = allocator); json_err != nil {
 		return default_config()
 	}
 	return cfg
@@ -86,7 +90,7 @@ load_config :: proc(filepath: string, allocator := context.allocator) -> Config 
 
 // Saves the given configuration to filepath in JSON format (enum stored as name)
 save_config :: proc(filepath: string, cfg: Config, allocator := context.allocator) -> bool {
-	json_bytes, err := json.marshal(cfg, {use_enum_names = true}, allocator=allocator)
+	json_bytes, err := json.marshal(cfg, {use_enum_names = true}, allocator = allocator)
 	if err != nil {
 		return false
 	}
