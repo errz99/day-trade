@@ -4,6 +4,7 @@ import "core:encoding/json"
 import "core:io"
 import "core:os"
 import "core:strconv"
+import runtime "base:runtime"
 
 // Structure definition for futures contracts
 FutureContract :: struct {
@@ -146,8 +147,17 @@ _init_json_marshalers :: proc() {
 	if _json_marshalers_ready {
 		return
 	}
+	// The user-marshaler registry is process-global and outlives the per-session
+	// arena, and its backing map requires cache-line (64-byte) aligned memory.
+	// Allocate it with the default heap allocator instead of context.allocator
+	// (which is the session arena while saving from UI callbacks) so the map
+	// allocation never depends on arena alignment behaviour.
+	session_alloc := context.allocator
+	context.allocator = runtime.heap_allocator()
 	json.set_user_marshalers(&_json_marshalers)
 	_ = json.register_user_marshaler(typeid_of(f64), marshal_f64)
+	context.allocator = session_alloc
+
 	_json_marshalers_ready = true
 }
 
