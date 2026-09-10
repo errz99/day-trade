@@ -83,28 +83,40 @@ Data :: struct {
 	active_broker:  int,
 }
 
-// Creates the default broker, whose futures database holds the supported indices
+// Creates a new broker with empty market databases; name and alias identify it.
+// Market data is meant to be filled in later (eventually from the UI)
 new_broker :: proc(name, alias: string, allocator := context.allocator) -> Broker {
 	broker := Broker {
 		name             = name,
 		alias            = alias,
-		futures_database = make([dynamic]FutureContract, 0, 7, allocator),
+		futures_database = make([dynamic]FutureContract, 0, allocator),
 		cfds_database    = make([dynamic]CFD_Contract, 0, allocator),
 		forex_database   = make([dynamic]ForexPair, 0, allocator),
 	}
+	return broker
+}
 
+// Per-side commissions for the built-in futures, one field per contract
+Builtin_Commissions :: struct {
+	nasdaq, sp, dow, russell, mini_dax, micro_dax, eurostoxx: f64,
+}
+
+// Fills a broker's futures database with the built-in contracts, using the given
+// per-side commissions.
+// NOTE: temporary seed data, just a starting point; it will be removed once
+// market data can be entered from the UI
+@(private = "file")
+seed_builtin_futures :: proc(broker: ^Broker, c: Builtin_Commissions) {
 	append(
 		&broker.futures_database,
-		FutureContract{"Micro E-mini Nasdaq 100", "nasdaq", "MNQ", 0.25, 2.0, 0.60},
-		FutureContract{"Micro E-mini S&P 500", "s&p", "MES", 0.25, 5.0, 0.60},
-		FutureContract{"Micro E-mini Dow Jones", "dow jones", "MYM", 1.00, 0.5, 0.60},
-		FutureContract{"Micro E-mini Russell 2000", "russell", "M2K", 0.10, 5.0, 0.60},
-		FutureContract{"Mini Dax", "mini dax", "FDXM", 1, 5, 1.25},
-		FutureContract{"Micro Dax", "micro dax", "FDXS", 1, 1, 0.75},
-		FutureContract{"EuroStoxx", "eurostoxx", "FESX", 1, 10, 3.50},
+		FutureContract{"Micro E-mini Nasdaq 100", "nasdaq", "MNQ", 0.25, 2.0, c.nasdaq},
+		FutureContract{"Micro E-mini S&P 500", "s&p", "MES", 0.25, 5.0, c.sp},
+		FutureContract{"Micro E-mini Dow Jones", "dow jones", "MYM", 1.00, 0.5, c.dow},
+		FutureContract{"Micro E-mini Russell 2000", "russell", "M2K", 0.10, 5.0, c.russell},
+		FutureContract{"Mini Dax", "mini dax", "FDXM", 1, 5, c.mini_dax},
+		FutureContract{"Micro Dax", "micro dax", "FDXS", 1, 1, c.micro_dax},
+		FutureContract{"EuroStoxx", "eurostoxx", "FESX", 1, 10, c.eurostoxx},
 	)
-
-	return broker
 }
 
 // Finds a futures contract by its alias (e.g. "nasdaq"); returns false when the
@@ -124,38 +136,49 @@ find_future_by_alias :: proc(
 	return {}, false
 }
 
-// Creates a copy of the given broker's market databases under a new name/alias
-duplicate_broker :: proc(
-	source: Broker,
-	name, alias: string,
-	allocator := context.allocator,
-) -> Broker {
-	broker := Broker {
-		name             = name,
-		alias            = alias,
-		futures_database = make(
-			[dynamic]FutureContract,
-			0,
-			len(source.futures_database),
-			allocator,
-		),
-		cfds_database    = make([dynamic]CFD_Contract, 0, len(source.cfds_database), allocator),
-		forex_database   = make([dynamic]ForexPair, 0, len(source.forex_database), allocator),
-	}
-	append(&broker.futures_database, ..source.futures_database[:])
-	append(&broker.cfds_database, ..source.cfds_database[:])
-	append(&broker.forex_database, ..source.forex_database[:])
-	return broker
-}
-
-// Builds the default broker set: the Interactive Broker one and a duplicate
-// named "iBroker". The first element is the default broker (index 0)
+// Builds the initial broker set: the Interactive Broker one and iBroker, both
+// seeded with the built-in futures and their respective per-side commissions
+// (temporary, to be completed from the UI later). The first element is the
+// default broker (index 0).
+//
+// Commissions captured from each broker's public schedule. Currency follows the
+// contract: USD for the CME/CBOT micros, EUR for the Eurex products.
 new_default_brokers :: proc(allocator := context.allocator) -> [dynamic]Broker {
 	brokers := make([dynamic]Broker, 0, 2, allocator)
 
+	// IBKR (fixed): execution 0.25 USD + exchange/regulatory recovery for the
+	// micros; Eurex flat fees (Mini/Micro-DAX, "everything else" for EuroStoxx)
 	ibkr := new_broker("Interactive Broker", "ibkr", allocator)
+	seed_builtin_futures(
+		&ibkr,
+		{
+			nasdaq = 0.62,
+			sp = 0.62,
+			dow = 0.61,
+			russell = 0.62,
+			mini_dax = 0.80,
+			micro_dax = 0.40,
+			eurostoxx = 2.00, // IBKR "everything else" row; to confirm
+		},
+	)
 	append(&brokers, ibkr)
-	append(&brokers, duplicate_broker(ibkr, "iBroker", "ibroker", allocator))
+
+	// iBroker: total commission per contract (Micro E-mini 1.25 USD, EuroStoxx
+	// 3.50 EUR). Mini/Micro-DAX pending: 0.0 until confirmed by hand
+	ibroker := new_broker("iBroker", "ibroker", allocator)
+	seed_builtin_futures(
+		&ibroker,
+		{
+			nasdaq = 1.25,
+			sp = 1.25,
+			dow = 1.25,
+			russell = 1.25,
+			mini_dax = 0.0, // TODO: confirm iBroker Mini-DAX commission
+			micro_dax = 0.0, // TODO: confirm iBroker Micro-DAX commission
+			eurostoxx = 3.50,
+		},
+	)
+	append(&brokers, ibroker)
 
 	return brokers
 }
