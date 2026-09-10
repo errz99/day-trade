@@ -1,18 +1,15 @@
 param(
-    [ValidateSet("tui", "iup", "gtk", "gtk4", "winforms", "all")]
-    [string]$Target = "tui"
+    [ValidateSet("iup", "gtk", "gtk4", "winforms", "all")]
+    [string]$Target = "gtk"
 )
 
 function Build-Target([string]$UI) {
     $outName = "day-trade-$UI.exe"
     Write-Host "[BUILD] Compiling $UI -> $outName" -ForegroundColor Cyan
 
-    # GUI targets (iup/gtk/winforms) run as Windows applications so no console
-    # window appears; the tui stays a console application (default console subsystem).
-    $odinArgs = @("-out:$outName", "-define:UI=$UI")
-    if ($UI -eq "iup" -or $UI -eq "gtk" -or $UI -eq "winforms") {
-        $odinArgs += "-subsystem:windows"
-    }
+    # All targets are GUI applications (run with the Windows subsystem so no
+    # console window appears). The text UI is available at runtime with -t.
+    $odinArgs = @("-out:$outName", "-define:UI=$UI", "-subsystem:windows")
 
     odin build . @odinArgs
     if ($LASTEXITCODE -ne 0) {
@@ -43,7 +40,6 @@ function Build-Target([string]$UI) {
 if ($Target -eq "gtk4") { $Target = "gtk" }
 
 if ($Target -eq "all") {
-    Build-Target "tui"
     Build-Target "iup"
     Build-Target "gtk"
     Build-Target "winforms"

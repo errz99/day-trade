@@ -2,14 +2,20 @@ package main
 
 import "ui/gtk"
 import "ui/iup"
-import "ui/tui"
 
-UI :: #config(UI, "tui")
+// Which graphical backend to build: gtk (default), iup or winforms
+UI :: #config(UI, "gtk")
 
 main :: proc() {
-	when UI == "gtk" || UI == "gtk4" {
-		gtk.run_gtk()
-	} else when UI == "iup" {
+	// Terminal mode (-t / --terminal) is available on Linux and macOS only;
+	// see terminal_unix.odin
+	when ODIN_OS == .Linux || ODIN_OS == .Darwin {
+		if run_terminal_mode() {
+			return
+		}
+	}
+
+	when UI == "iup" {
 		iup.run_iup()
 	} else when UI == "winforms" {
 		when ODIN_OS == .Windows {
@@ -18,6 +24,6 @@ main :: proc() {
 			panic("the winforms UI is only available on Windows")
 		}
 	} else {
-		tui.run_tui()
+		gtk.run_gtk()
 	}
 }
