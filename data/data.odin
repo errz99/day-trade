@@ -60,29 +60,34 @@ Trade :: struct {
 // for now (to be filled in as those markets are implemented)
 Broker :: struct {
 	name:             string,
+	alias:            string,
 	futures_database: [dynamic]FutureContract,
 	cfds_database:    [dynamic]CFD_Contract,
 	forex_database:   [dynamic]ForexPair,
 }
 
-// Account groups a trading account with its broker and its trade history
+// Account groups a trading account with the index of the broker it trades with
+// (an index into Data.brokers) and its trade history
 Account :: struct {
-	name:   string,
-	broker: Broker,
-	trades: [dynamic]Trade,
+	name:         string,
+	broker_index: int,
+	trades:       [dynamic]Trade,
 }
 
 // Data is the top-level application state; it will grow as more data is added.
-// active_account indexes the account currently in use
+// active_account / active_broker index the account and broker currently in use
 Data :: struct {
 	accounts:       [dynamic]Account,
 	active_account: int,
+	brokers:        [dynamic]Broker,
+	active_broker:  int,
 }
 
 // Creates the default broker, whose futures database holds the supported indices
-new_default_broker :: proc(allocator := context.allocator) -> Broker {
+new_broker :: proc(name, alias: string, allocator := context.allocator) -> Broker {
 	broker := Broker {
-		name             = "Default",
+		name             = name,
+		alias            = alias,
 		futures_database = make([dynamic]FutureContract, 0, 7, allocator),
 		cfds_database    = make([dynamic]CFD_Contract, 0, allocator),
 		forex_database   = make([dynamic]ForexPair, 0, allocator),
@@ -104,7 +109,13 @@ new_default_broker :: proc(allocator := context.allocator) -> Broker {
 
 // Finds a futures contract by its alias (e.g. "nasdaq"); returns false when the
 // alias is not present in the given database
-find_future_by_alias :: proc(contracts: []FutureContract, alias: string) -> (FutureContract, bool) {
+find_future_by_alias :: proc(
+	contracts: []FutureContract,
+	alias: string,
+) -> (
+	FutureContract,
+	bool,
+) {
 	for contract in contracts {
 		if contract.alias == alias {
 			return contract, true
@@ -113,11 +124,56 @@ find_future_by_alias :: proc(contracts: []FutureContract, alias: string) -> (Fut
 	return {}, false
 }
 
-// Creates the default account, holding the default broker and its market database
-new_default_account :: proc(allocator := context.allocator) -> Account {
+// Creates a copy of the given broker's market databases under a new name/alias
+duplicate_broker :: proc(
+	source: Broker,
+	name, alias: string,
+	allocator := context.allocator,
+) -> Broker {
+	broker := Broker {
+		name             = name,
+		alias            = alias,
+		futures_database = make(
+			[dynamic]FutureContract,
+			0,
+			len(source.futures_database),
+			allocator,
+		),
+		cfds_database    = make([dynamic]CFD_Contract, 0, len(source.cfds_database), allocator),
+		forex_database   = make([dynamic]ForexPair, 0, len(source.forex_database), allocator),
+	}
+	append(&broker.futures_database, ..source.futures_database[:])
+	append(&broker.cfds_database, ..source.cfds_database[:])
+	append(&broker.forex_database, ..source.forex_database[:])
+	return broker
+}
+
+// Builds the default broker set: the Interactive Broker one and a duplicate
+// named "iBroker". The first element is the default broker (index 0)
+new_default_brokers :: proc(allocator := context.allocator) -> [dynamic]Broker {
+	brokers := make([dynamic]Broker, 0, 2, allocator)
+
+	ibkr := new_broker("Interactive Broker", "ibkr", allocator)
+	append(&brokers, ibkr)
+	append(&brokers, duplicate_broker(ibkr, "iBroker", "ibroker", allocator))
+
+	return brokers
+}
+
+// Returns the broker an account trades with; nil when the index is out of range
+get_account_broker :: proc(trading_data: ^Data, account: ^Account) -> ^Broker {
+	if account.broker_index < 0 || account.broker_index >= len(trading_data.brokers) {
+		return nil
+	}
+	return &trading_data.brokers[account.broker_index]
+}
+
+// Creates the default account, trading with the broker at broker_index
+new_default_account :: proc(broker_index := 0, allocator := context.allocator) -> Account {
 	account := Account {
-		name   = "Default",
-		broker = new_default_broker(allocator),
+		name         = "Default",
+		broker_index = broker_index,
+		trades       = make([dynamic]Trade, 0, allocator),
 	}
 	return account
 }
@@ -145,13 +201,15 @@ record_trade :: proc(
 	)
 }
 
-// Creates the initial application data, holding the default account
+// Creates the initial application data, holding the default brokers and account
 new_default_data :: proc(allocator := context.allocator) -> Data {
 	trading_data := Data {
 		accounts       = make([dynamic]Account, 0, 1, allocator),
 		active_account = 0,
+		brokers        = new_default_brokers(allocator),
+		active_broker  = 0, // the first broker is the default one
 	}
-	append(&trading_data.accounts, new_default_account(allocator))
+	append(&trading_data.accounts, new_default_account(0, allocator))
 	return trading_data
 }
 
@@ -216,13 +274,20 @@ load_data :: proc(filepath: string, allocator := context.allocator) -> (Data, bo
 		return Data{}, false
 	}
 
-	// Migration: files saved before futures were kept in a dynamic array (they
-	// used a market_database map) are loaded with an empty futures database
+	// Migration: files saved before brokers lived in Data.brokers (they embedded
+	// a broker in each account) are loaded without brokers, so the default set
+	// is created and the accounts are pointed at the default broker
+	if len(trading_data.brokers) == 0 {
+		trading_data.brokers = new_default_brokers(allocator)
+		trading_data.active_broker = 0
+	}
 	for &account in trading_data.accounts {
-		if len(account.broker.futures_database) == 0 {
-			defaults := new_default_broker(allocator)
-			account.broker.futures_database = defaults.futures_database
+		if account.broker_index < 0 || account.broker_index >= len(trading_data.brokers) {
+			account.broker_index = 0
 		}
+	}
+	if trading_data.active_broker < 0 || trading_data.active_broker >= len(trading_data.brokers) {
+		trading_data.active_broker = 0
 	}
 
 	return trading_data, true
