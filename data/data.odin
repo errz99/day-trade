@@ -1,24 +1,39 @@
 package data
 
+import runtime "base:runtime"
 import "core:encoding/json"
 import "core:io"
 import "core:os"
 import "core:strconv"
-import runtime "base:runtime"
+
+// Supported languages for user interface
+Language :: enum {
+	Spanish,
+	English,
+}
 
 // Structure definition for futures contracts
 FutureContract :: struct {
 	name:          string,
+	alias:         string,
 	ticker:        string,
 	tick_size:     f64, // Minimum price movement (e.g., 0.25)
 	point_value:   f64, // Value in base currency of 1 full point (e.g., $2 or 2€)
 	cost_per_side: f64, // Commission fee per side (open or close) for 1 contract
 }
 
-// Supported languages for user interface
-Language :: enum {
-	Spanish,
-	English,
+// Structure definition for CFD contracts
+CFD_Contract :: struct {
+	name:   string,
+	alias:  string,
+	ticker: string,
+}
+
+// Structure definition for Forex pairs
+ForexPair :: struct {
+	name:   string,
+	alias:  string,
+	ticker: string,
 }
 
 // Result of trade calculation
@@ -33,17 +48,21 @@ TradeCalculation :: struct {
 // to historial_trading.txt); direction is kept semantically as is_long
 Trade :: struct {
 	ticker:   string, // market ticker (e.g., "MES")
-	is_long:  bool,   // trade direction: long or short
-	quantity: int,    // number of contracts traded
-	entry:    f64,    // entry price
-	exit:     f64,    // exit price
-	net_pnl:  f64,    // net result after commissions
+	is_long:  bool, // trade direction: long or short
+	quantity: int, // number of contracts traded
+	entry:    f64, // entry price
+	exit:     f64, // exit price
+	net_pnl:  f64, // net result after commissions
 }
 
-// Broker groups a trading venue with its database of tradeable futures contracts
+// Broker groups a trading venue with its tradeable markets. Each market type
+// has its own database; futures are populated by default, the rest are empty
+// for now (to be filled in as those markets are implemented)
 Broker :: struct {
-	name:            string,
-	market_database: map[string]FutureContract,
+	name:             string,
+	futures_database: [dynamic]FutureContract,
+	cfds_database:    [dynamic]CFD_Contract,
+	forex_database:   [dynamic]ForexPair,
 }
 
 // Account groups a trading account with its broker and its trade history
@@ -60,40 +79,38 @@ Data :: struct {
 	active_account: int,
 }
 
-// Creates the default broker, whose market database holds the supported indices
+// Creates the default broker, whose futures database holds the supported indices
 new_default_broker :: proc(allocator := context.allocator) -> Broker {
 	broker := Broker {
-		name            = "Default",
-		market_database = make(map[string]FutureContract, allocator),
+		name             = "Default",
+		futures_database = make([dynamic]FutureContract, 0, 7, allocator),
+		cfds_database    = make([dynamic]CFD_Contract, 0, allocator),
+		forex_database   = make([dynamic]ForexPair, 0, allocator),
 	}
 
-	broker.market_database["nasdaq"] = FutureContract {
-		"Micro E-mini Nasdaq 100",
-		"MNQ",
-		0.25,
-		2.0,
-		0.60,
-	}
-	broker.market_database["s&p"] = FutureContract{"Micro E-mini S&P 500", "MES", 0.25, 5.0, 0.60}
-	broker.market_database["dow jones"] = FutureContract {
-		"Micro E-mini Dow Jones",
-		"MYM",
-		1.00,
-		0.5,
-		0.60,
-	}
-	broker.market_database["russell"] = FutureContract {
-		"Micro E-mini Russell 2000",
-		"M2K",
-		0.10,
-		5.0,
-		0.60,
-	}
-	broker.market_database["mini dax"] = FutureContract{"Mini Dax", "FDXM", 1, 5, 1.25}
-	broker.market_database["micro dax"] = FutureContract{"Micro Dax", "FDXS", 1, 1, 0.75}
-	broker.market_database["eurostoxx"] = FutureContract{"EuroStoxx", "FESX", 1, 10, 3.50}
+	append(
+		&broker.futures_database,
+		FutureContract{"Micro E-mini Nasdaq 100", "nasdaq", "MNQ", 0.25, 2.0, 0.60},
+		FutureContract{"Micro E-mini S&P 500", "s&p", "MES", 0.25, 5.0, 0.60},
+		FutureContract{"Micro E-mini Dow Jones", "dow jones", "MYM", 1.00, 0.5, 0.60},
+		FutureContract{"Micro E-mini Russell 2000", "russell", "M2K", 0.10, 5.0, 0.60},
+		FutureContract{"Mini Dax", "mini dax", "FDXM", 1, 5, 1.25},
+		FutureContract{"Micro Dax", "micro dax", "FDXS", 1, 1, 0.75},
+		FutureContract{"EuroStoxx", "eurostoxx", "FESX", 1, 10, 3.50},
+	)
 
 	return broker
+}
+
+// Finds a futures contract by its alias (e.g. "nasdaq"); returns false when the
+// alias is not present in the given database
+find_future_by_alias :: proc(contracts: []FutureContract, alias: string) -> (FutureContract, bool) {
+	for contract in contracts {
+		if contract.alias == alias {
+			return contract, true
+		}
+	}
+	return {}, false
 }
 
 // Creates the default account, holding the default broker and its market database
@@ -106,15 +123,26 @@ new_default_account :: proc(allocator := context.allocator) -> Account {
 }
 
 // Appends a finished trade to the account's trade history
-record_trade :: proc(account: ^Account, ticker: string, is_long: bool, quantity: int, entry: f64, exit: f64, net_pnl: f64) {
-	append(&account.trades, Trade {
-		ticker   = ticker,
-		is_long  = is_long,
-		quantity = quantity,
-		entry    = entry,
-		exit     = exit,
-		net_pnl  = net_pnl,
-	})
+record_trade :: proc(
+	account: ^Account,
+	ticker: string,
+	is_long: bool,
+	quantity: int,
+	entry: f64,
+	exit: f64,
+	net_pnl: f64,
+) {
+	append(
+		&account.trades,
+		Trade {
+			ticker = ticker,
+			is_long = is_long,
+			quantity = quantity,
+			entry = entry,
+			exit = exit,
+			net_pnl = net_pnl,
+		},
+	)
 }
 
 // Creates the initial application data, holding the default account
@@ -166,11 +194,7 @@ _init_json_marshalers :: proc() {
 save_data :: proc(filepath: string, trading_data: Data, allocator := context.allocator) -> bool {
 	_init_json_marshalers()
 
-	json_bytes, err := json.marshal(
-		trading_data,
-		{sort_maps_by_key = true},
-		allocator=allocator,
-	)
+	json_bytes, err := json.marshal(trading_data, {sort_maps_by_key = true}, allocator = allocator)
 	if err != nil {
 		return false
 	}
@@ -188,9 +212,19 @@ load_data :: proc(filepath: string, allocator := context.allocator) -> (Data, bo
 	defer delete(content)
 
 	trading_data: Data
-	if json_err := json.unmarshal(content, &trading_data, allocator=allocator); json_err != nil {
+	if json_err := json.unmarshal(content, &trading_data, allocator = allocator); json_err != nil {
 		return Data{}, false
 	}
+
+	// Migration: files saved before futures were kept in a dynamic array (they
+	// used a market_database map) are loaded with an empty futures database
+	for &account in trading_data.accounts {
+		if len(account.broker.futures_database) == 0 {
+			defaults := new_default_broker(allocator)
+			account.broker.futures_database = defaults.futures_database
+		}
+	}
+
 	return trading_data, true
 }
 

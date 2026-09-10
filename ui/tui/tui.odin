@@ -102,7 +102,7 @@ run_tui :: proc() {
 	asset_bytes, _ := bufio.reader_read_string(&reader, '\n', context.temp_allocator)
 	asset_input := strings.to_lower(strings.trim_space(string(asset_bytes)))
 
-	contract, exists := account.broker.market_database[asset_input]
+	contract, exists := dt.find_future_by_alias(account.broker.futures_database[:], asset_input)
 	if !exists {
 		fmt.println(msg.unsupported_market)
 		return
