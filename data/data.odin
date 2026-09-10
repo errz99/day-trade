@@ -5,6 +5,7 @@ import "core:encoding/json"
 import "core:io"
 import "core:os"
 import "core:strconv"
+import "core:time"
 
 // Supported languages for user interface
 Language :: enum {
@@ -47,6 +48,7 @@ TradeCalculation :: struct {
 // A finished trade registered in an account's history (mirrors what is logged
 // to historial_trading.txt); direction is kept semantically as is_long
 Trade :: struct {
+	date:     int, // trade date as YYYYMMDD (e.g. 20260930), quick to sort
 	ticker:   string, // market ticker (e.g., "MES")
 	is_long:  bool, // trade direction: long or short
 	quantity: int, // number of contracts traded
@@ -201,7 +203,14 @@ new_default_account :: proc(broker_index := 0, allocator := context.allocator) -
 	return account
 }
 
-// Appends a finished trade to the account's trade history
+// Returns the current local date as a number in YYYYMMDD form (e.g. 20260930)
+current_date_number :: proc "contextless" () -> int {
+	year, month, day := time.date(time.now())
+	return year * 10000 + int(month) * 100 + day
+}
+
+// Appends a finished trade to the account's trade history; `date` is the trade
+// date as YYYYMMDD (use current_date_number() for "today")
 record_trade :: proc(
 	account: ^Account,
 	ticker: string,
@@ -210,10 +219,12 @@ record_trade :: proc(
 	entry: f64,
 	exit: f64,
 	net_pnl: f64,
+	date: int,
 ) {
 	append(
 		&account.trades,
 		Trade {
+			date = date,
 			ticker = ticker,
 			is_long = is_long,
 			quantity = quantity,
