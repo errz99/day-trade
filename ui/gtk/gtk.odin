@@ -85,9 +85,11 @@ on_button_clicked :: proc "c" (_: ^gtk.Widget, user_data: gio.Pointer) {
 		dt.save_data("data.json", ctx.data)
 		dt.save_config("config.json", ctx.config)
 		gio.application_quit(cast(^gio.Application)ctx.app)
+	case .Trade:
+		open_trade_dialog(ctx)
 	case .Config:
 		open_config_dialog(ctx)
-	case .Trade, .Results, .Account:
+	case .Results, .Account:
 		open_section_dialog(ctx, common.action_title(ctx.texts, info.action))
 	}
 }

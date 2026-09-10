@@ -20,6 +20,8 @@ FileDialog :: distinct rawptr // GtkFileDialog
 Box :: distinct rawptr // GtkBox
 Button :: distinct rawptr // GtkButton
 CheckButton :: distinct rawptr // GtkCheckButton
+ComboBox :: distinct rawptr // GtkComboBox
+ComboBoxText :: distinct rawptr // GtkComboBoxText
 DrawingArea :: distinct rawptr // GtkDrawingArea
 
 DrawingAreaDrawFunc :: #type proc "c" (
@@ -45,6 +47,7 @@ Widget :: distinct rawptr // GtkWidget
 Window :: distinct rawptr // GtkWindow
 Settings :: distinct rawptr // GtkSettings
 EntryBuffer :: distinct rawptr // GtkEntryBuffer
+Editable :: distinct rawptr // GtkEditable (implemented by GtkEntry, GtkSpinButton...)
 
 // Gtk.Align
 Align :: enum {
@@ -229,6 +232,14 @@ foreign gtk {
 	// (GTK4 removed GtkRadioButton in favour of grouped check buttons)
 	check_button_set_group :: proc(check_button: ^CheckButton, group: ^CheckButton) ---
 
+	// GtkComboBoxText / GtkComboBox
+	combo_box_text_new :: proc() -> ^Widget ---
+	combo_box_text_append_text :: proc(combo_box: ^ComboBoxText, text: cstring) ---
+	combo_box_text_remove_all :: proc(combo_box: ^ComboBoxText) ---
+	combo_box_text_get_active_text :: proc(combo_box: ^ComboBoxText) -> cstring ---
+	combo_box_get_active :: proc(combo_box: ^ComboBox) -> c.int ---
+	combo_box_set_active :: proc(combo_box: ^ComboBox, index: c.int) ---
+
 	// GtkEntryBuffer
 	entry_buffer_new :: proc(initial_chars: cstring, n_initial_chars: c.int) -> ^EntryBuffer ---
 	entry_buffer_set_text :: proc(buffer: ^EntryBuffer, chars: cstring, n_chars: c.int) ---
@@ -236,6 +247,11 @@ foreign gtk {
 	// GtkEntry
 	entry_new :: proc() -> ^Widget ---
 	entry_new_with_buffer :: proc(buffer: ^EntryBuffer) -> ^Widget ---
+	entry_set_placeholder_text :: proc(entry: ^Widget, text: cstring) ---
+
+	// GtkEditable (GTK4 moved the entry text API here)
+	editable_get_text :: proc(editable: ^Editable) -> cstring ---
+	editable_set_text :: proc(editable: ^Editable, text: cstring) ---
 
 	// GtkDrawinArea
 	drawing_area_new :: proc() -> ^Widget ---
