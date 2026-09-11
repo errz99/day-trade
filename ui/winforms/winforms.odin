@@ -146,6 +146,7 @@ run_winforms :: proc() {
 	label_w: i32 = 240
 	account_label := wf.new_label(frm, account_text, (win_w - label_w) / 2, 24, label_w, 32)
 	account_label._style |= api.SS_CENTER
+	account_label._style &= ~api.WS_TABSTOP // labels are not part of the tab order
 
 	// 2. Column of menu buttons, each launching its own dialog
 	btn_w: i32 = 150

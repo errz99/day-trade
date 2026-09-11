@@ -162,6 +162,19 @@ start_mainloop :: proc(this: ^Form)
     UpdateWindow(this.handle)
     ms : MSG
     for GetMessage(&ms, nil, 0, 0) != 0 {
+        // Keyboard navigation (Tab, Shift+Tab and the arrows inside a radio group)
+        // is not part of the default window procedure: it has to be routed through
+        // IsDialogMessage, which needs the window holding the focused control (the
+        // parent of the focus, so it also works when the app is not the foreground
+        // window). See mag_keyboard.odin.
+        nav_target := GetActiveWindow()
+        if focused := GetFocus(); focused != nil {
+            if parent := GetParent(focused); parent != nil do nav_target = parent
+        }
+        if nav_target != nil && bool(IsDialogMessage(nav_target, &ms)) {
+            continue
+        }
+
         TranslateMessage(&ms)
         DispatchMessage(&ms)
     }

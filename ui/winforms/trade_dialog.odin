@@ -59,6 +59,14 @@ set_status :: proc(text: string) {
 	wf.control_set_text(&_trade.status.control, text)
 }
 
+// Labels are not part of the tab order, even though the binding gives every
+// control the WS_TABSTOP style
+make_label :: proc(form: ^wf.Form, text: string, x, y, w, h: i32) -> ^wf.Label {
+	label := wf.new_label(form, text, x, y, w, h)
+	label._style &= ~api.WS_TABSTOP
+	return label
+}
+
 // Reads an entry and parses it, freeing the string the binding allocates
 parse_entry_int :: proc(tb: ^wf.TextBox) -> (int, bool) {
 	text := wf.control_get_text(tb.control)
@@ -223,46 +231,39 @@ build_trade_dialog :: proc() {
 	form.onClosing = on_trade_closing
 	_trade.form = form
 
-	_trade.account = wf.new_label(form, "", LABEL_X, 14, 388, label_h)
-	_trade.broker = wf.new_label(form, "", LABEL_X, 36, 388, label_h)
+	_trade.account = make_label(form, "", LABEL_X, 14, 388, label_h)
+	_trade.broker = make_label(form, "", LABEL_X, 36, 388, label_h)
 
-	market_label := wf.new_label(form, string(texts.market), LABEL_X, row_y(0) + 4, LABEL_W, label_h)
+	market_label := make_label(form, string(texts.market), LABEL_X, row_y(0) + 4, LABEL_W, label_h)
 	_trade.market = wf.new_combobox(form, FIELD_X, row_y(0), FIELD_W, ROW_H)
 	_trade.market.onTextChanged = on_trade_market_changed
 	for market_name in texts.markets {
 		wf.combo_add_item(_trade.market, string(market_name))
 	}
 
-	value_label := wf.new_label(form, string(texts.symbol), LABEL_X, row_y(1) + 4, LABEL_W, label_h)
+	value_label := make_label(form, string(texts.symbol), LABEL_X, row_y(1) + 4, LABEL_W, label_h)
 	_trade.value = wf.new_combobox(form, FIELD_X, row_y(1), FIELD_W, ROW_H)
 
-	direction_label := wf.new_label(
-		form,
-		string(texts.direction),
-		LABEL_X,
-		row_y(2) + 4,
-		LABEL_W,
-		label_h,
-	)
+	direction_label := make_label(form, string(texts.direction), LABEL_X, row_y(2) + 4, LABEL_W, label_h)
 	_trade.long = wf.new_radiobutton(form, string(texts.long), FIELD_X, row_y(2), 94, ROW_H)
 	_trade.short = wf.new_radiobutton(form, string(texts.short), FIELD_X + 100, row_y(2), 94, ROW_H)
 
-	amount_label := wf.new_label(form, string(texts.amount), LABEL_X, row_y(3) + 4, LABEL_W, label_h)
+	amount_label := make_label(form, string(texts.amount), LABEL_X, row_y(3) + 4, LABEL_W, label_h)
 	_trade.amount = wf.new_textbox(form, "", FIELD_X, row_y(3), FIELD_W, ROW_H)
 
-	entry_label := wf.new_label(form, string(texts.entry), LABEL_X, row_y(4) + 4, LABEL_W, label_h)
+	entry_label := make_label(form, string(texts.entry), LABEL_X, row_y(4) + 4, LABEL_W, label_h)
 	_trade.entry = wf.new_textbox(form, "", FIELD_X, row_y(4), FIELD_W, ROW_H)
 
-	exit_label := wf.new_label(form, string(texts.exit), LABEL_X, row_y(5) + 4, LABEL_W, label_h)
+	exit_label := make_label(form, string(texts.exit), LABEL_X, row_y(5) + 4, LABEL_W, label_h)
 	_trade.exit = wf.new_textbox(form, "", FIELD_X, row_y(5), FIELD_W, ROW_H)
 
-	date_label := wf.new_label(form, string(texts.date), LABEL_X, row_y(6) + 4, LABEL_W, label_h)
+	date_label := make_label(form, string(texts.date), LABEL_X, row_y(6) + 4, LABEL_W, label_h)
 	_trade.date = wf.new_textbox(form, "", FIELD_X, row_y(6), FIELD_W, ROW_H)
 
 	_trade.add = wf.new_button(form, string(texts.add), (DIALOG_WIDTH - 120) / 2, 320, 120, 30)
 	_trade.add.onClick = on_trade_add_clicked
 
-	_trade.status = wf.new_label(form, "", LABEL_X, 360, 388, label_h)
+	_trade.status = make_label(form, "", LABEL_X, 360, 388, label_h)
 	_trade.status._style |= api.SS_CENTER
 
 	_trade.close = wf.new_button(form, string(texts.close), 306, 390, 98, 28)
@@ -316,6 +317,10 @@ open_trade_dialog :: proc() {
 	wf.control_enable(&_app.main.control, false)
 	wf.form_show(_trade.form^)
 	api.SetForegroundWindow(cast(api.HWND)_trade.form.handle)
+
+	// The quantity entry takes the focus, so the dialog can be filled with the
+	// keyboard: Tab moves to the next field and Shift+Tab to the previous one
+	wf.SetFocus(_trade.amount.handle)
 }
 
 // Hides the dialog and gives the control back to the main window

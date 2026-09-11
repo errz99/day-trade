@@ -310,6 +310,24 @@ button_set_gradient_colors :: proc(btn : ^Button, clr1, clr2 : uint)
 		case CM_NOTIFY:			
 			return btn_wmnotify_handler(this, lp)
 
+		// Keyboard activation: a button does not react to keys on its own in a plain
+		// window (the click notification it would send is taken for a menu command),
+		// so Space and Enter activate the handler of the focused button here. It is
+		// done on the key release, so holding the key down does not repeat the action.
+		case WM_KEYDOWN:
+			if (wp == api.VK_SPACE || wp == api.VK_RETURN) && this.onClick != nil {
+				return 0
+			}
+			return DefSubclassProc(hw, msg, wp, lp)
+
+		case WM_KEYUP:
+			if (wp == api.VK_SPACE || wp == api.VK_RETURN) && this.onClick != nil {
+				ea := new_event_args()
+				this.onClick(this, &ea)
+				return 0
+			}
+			return DefSubclassProc(hw, msg, wp, lp)
+
 		case WM_NCDESTROY:			
 			RemoveWindowSubclass(this.handle, btn_wnd_proc, sc_id)
 			btn_finalize(this)					
