@@ -16,7 +16,11 @@ main :: proc() {
 	}
 
 	when UI == "iup" {
-		iup.run_iup()
+		when ODIN_OS == .Windows {
+			iup.run_iup()
+		} else {
+			panic("the iup UI is only available on Windows")
+		}
 	} else when UI == "winforms" {
 		when ODIN_OS == .Windows {
 			run_winforms_ui()

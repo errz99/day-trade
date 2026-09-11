@@ -138,7 +138,7 @@ find_future_by_alias :: proc(
 	return {}, false
 }
 
-// Builds the initial broker set: the Interactive Broker one and iBroker, both
+// Builds the initial broker set: the Interactive Brokers one and iBroker, both
 // seeded with the built-in futures and their respective per-side commissions
 // (temporary, to be completed from the UI later). The first element is the
 // default broker (index 0).
@@ -150,15 +150,15 @@ new_default_brokers :: proc(allocator := context.allocator) -> [dynamic]Broker {
 
 	// IBKR (fixed): execution 0.25 USD + exchange/regulatory recovery for the
 	// micros; Eurex flat fees (Mini/Micro-DAX, "everything else" for EuroStoxx)
-	ibkr := new_broker("Interactive Broker", "ibkr", allocator)
+	ibkr := new_broker("Interactive Brokers", "ibkr", allocator)
 	seed_builtin_futures(
 		&ibkr,
 		{
-			nasdaq = 0.62,
-			sp = 0.62,
-			dow = 0.61,
-			russell = 0.62,
-			mini_dax = 0.80,
+			nasdaq    = 0.62,
+			sp        = 0.62,
+			dow       = 0.61,
+			russell   = 0.62,
+			mini_dax  = 0.80,
 			micro_dax = 0.40,
 			eurostoxx = 2.00, // IBKR "everything else" row; to confirm
 		},
@@ -171,12 +171,12 @@ new_default_brokers :: proc(allocator := context.allocator) -> [dynamic]Broker {
 	seed_builtin_futures(
 		&ibroker,
 		{
-			nasdaq = 1.25,
-			sp = 1.25,
-			dow = 1.25,
-			russell = 1.25,
-			mini_dax = 0.0, // TODO: confirm iBroker Mini-DAX commission
-			micro_dax = 0.0, // TODO: confirm iBroker Micro-DAX commission
+			nasdaq = 1.08,
+			sp = 1.08,
+			dow = 1.08,
+			russell = 1.08,
+			mini_dax = 1.50,
+			micro_dax = 0.75,
 			eurostoxx = 3.50,
 		},
 	)

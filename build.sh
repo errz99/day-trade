@@ -41,9 +41,9 @@ TARGET_LOWER=$(echo "$TARGET" | tr '[:upper:]' '[:lower:]')
 
 case "$TARGET_LOWER" in
     all)
-        build_target "iup"
         build_target "gtk"
         if [ "${IS_WINDOWS_SHELL}" = "1" ]; then
+            build_target "iup"
             build_target "winforms"
         fi
         ;;

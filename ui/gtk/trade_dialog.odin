@@ -3,10 +3,10 @@ package gtk_ui
 import dt "../../data"
 import gio "../../lib/gtk4/glib/gio"
 import gtk "../../lib/gtk4/gtk"
+import runtime "base:runtime"
 import "core:fmt"
 import "core:strconv"
 import "core:strings"
-import runtime "base:runtime"
 
 // ---------------------------------------------------------------------------
 // Trade dialog: registers an already-closed trade in the active account.
@@ -20,11 +20,11 @@ Trade_Texts :: struct {
 	account:       cstring,
 	broker:        cstring,
 	market:        cstring,
-	value:         cstring,
+	symbol:        cstring,
 	direction:     cstring,
 	long:          cstring,
 	short:         cstring,
-	contracts:     cstring,
+	amount:        cstring,
 	entry:         cstring,
 	exit:          cstring,
 	date:          cstring,
@@ -47,11 +47,11 @@ get_trade_texts :: proc(lang: dt.Language) -> Trade_Texts {
 			account = cstring("Account"),
 			broker = cstring("Broker"),
 			market = cstring("Market"),
-			value = cstring("Value"),
+			symbol = cstring("Symbol"),
 			direction = cstring("Direction"),
 			long = cstring("Long"),
 			short = cstring("Short"),
-			contracts = cstring("Contracts"),
+			amount = cstring("Amount"),
 			entry = cstring("Entry price"),
 			exit = cstring("Exit price"),
 			date = cstring("Date (YYYYMMDD)"),
@@ -71,11 +71,11 @@ get_trade_texts :: proc(lang: dt.Language) -> Trade_Texts {
 			account = cstring("Cuenta"),
 			broker = cstring("Broker"),
 			market = cstring("Mercado"),
-			value = cstring("Valor"),
+			symbol = cstring("Valor"),
 			direction = cstring("Dirección"),
 			long = cstring("Largos"),
 			short = cstring("Cortos"),
-			contracts = cstring("Contratos"),
+			amount = cstring("Cantidad"),
 			entry = cstring("Precio entrada"),
 			exit = cstring("Precio salida"),
 			date = cstring("Fecha (AAAAMMDD)"),
@@ -307,7 +307,7 @@ open_trade_dialog :: proc(ctx: ^Context) {
 
 	value_combo := gtk.combo_box_text_new()
 	state.value_combo = value_combo
-	trade_add_row(root, texts.value, value_combo)
+	trade_add_row(root, texts.symbol, value_combo)
 
 	// --- Direction (grouped check buttons behave like radio buttons) --------
 	direction_row := gtk.box_new(.Horizontal, 8)
@@ -328,7 +328,7 @@ open_trade_dialog :: proc(ctx: ^Context) {
 	// --- Trade fields -------------------------------------------------------
 	contracts_entry := gtk.entry_new()
 	state.contracts_entry = contracts_entry
-	trade_add_row(root, texts.contracts, contracts_entry)
+	trade_add_row(root, texts.amount, contracts_entry)
 
 	entry_entry := gtk.entry_new()
 	state.entry_entry = entry_entry
