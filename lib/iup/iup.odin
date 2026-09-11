@@ -85,6 +85,11 @@ foreign iup {
 	// mag
 	IupUpdate :: proc(ih: Ihandle) ---
 
+	// Nombres de elementos (usados por atributos como PARENTDIALOG, MENU o DEFAULTESC)
+	IupSetHandle :: proc(name: cstring, ih: Ihandle) -> i32 ---
+	IupGetHandle :: proc(name: cstring) -> Ihandle ---
+	IupGetName :: proc(ih: Ihandle) -> cstring ---
+
 	// Control de Visualización y Foco
 	IupShowXY :: proc(ih: Ihandle, x, y: i32) -> i32 ---
 	IupShow :: proc(ih: Ihandle) -> i32 ---
@@ -154,7 +159,7 @@ LEFT: i32 : 0xFFFE
 RIGHT: i32 : 0xFFFD
 MOUSEPOS: i32 : 0xFFFC
 CURRENT: i32 : 0xFFFB
-CENTERPARENT: i32 : 0xFAFA
+CENTERPARENT: i32 : 0xFFFA // era 0xFAFA: valor inválido, dejaba la ventana fuera de pantalla
 TOP: i32 : 0xFFFE
 BOTTOM: i32 : 0xFFFD
 

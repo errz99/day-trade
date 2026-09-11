@@ -11,13 +11,14 @@ import "core:strings"
 // IUP callbacks carry no user data, so the UI state lives at package level;
 // it is set up in run_iup and stays valid for the whole main loop
 App_State :: struct {
-	data:       dt.Data,
-	config:     dt.Config,
-	texts:      common.Menu_Texts,
-	main_dlg:   iup.Ihandle,
-	buttons:    [len(common.MENU_ACTIONS)]iup.Ihandle,
-	alloc:      mem.Allocator, // session arena allocator, restored inside "c" callbacks
-	temp_alloc: mem.Allocator,
+	data:        dt.Data,
+	config:      dt.Config,
+	texts:       common.Menu_Texts,
+	main_dlg:    iup.Ihandle,
+	buttons:     [len(common.MENU_ACTIONS)]iup.Ihandle,
+	dialog_open: bool, // true while a section or trade dialog is on screen
+	alloc:       mem.Allocator, // session arena allocator, restored inside "c" callbacks
+	temp_alloc:  mem.Allocator,
 }
 
 _app: App_State
@@ -25,6 +26,10 @@ _app: App_State
 // "c" callbacks have no implicit context; the first thing they must do is
 // restore the session one so that any Odin code invoked from them can allocate
 // through the session arena
+
+// Name under which the main dialog is registered so the child dialogs can refer
+// to it through the PARENTDIALOG attribute (which expects a dialog name)
+MAIN_DIALOG_NAME :: "main_dialog"
 
 // Creates a simple centered label inside a full-width row
 make_label :: proc(text: cstring) -> iup.Ihandle {
@@ -34,9 +39,54 @@ make_label :: proc(text: cstring) -> iup.Ihandle {
 	return label
 }
 
-// Opens a dialog window for a section (placeholder content), centered on screen.
-// It is modeless and shown with IupShowXY; IUP cleans it up when it is closed.
+// Shows a dialog owned by the main window and centered over it, so that only one
+// dialog is on screen at a time.
+//
+// The main window is disabled while the dialog is open, which is the modal
+// behaviour: its buttons can not be clicked, so a second dialog can never be
+// opened. The dialog is a plain window shown with IupShowXY rather than a modal
+// popup (IupPopup): in IUP 3 the MODAL attribute is read-only, and a popup
+// leaves the dialog unusable once it ends, so it can not be shown again.
+//
+// The main window is re-enabled by on_child_dialog_closed, called from the close
+// callbacks of the dialog.
+//
+// IUP_CENTERPARENT centers the dialog over its parent dialog (the main window)
+// instead of over the whole screen; it needs PARENTDIALOG to be defined.
+show_child_dialog :: proc(dlg: iup.Ihandle) {
+	iup.IupSetAttribute(dlg, "PARENTDIALOG", MAIN_DIALOG_NAME)
+	_app.dialog_open = true
+	iup.IupSetAttribute(_app.main_dlg, "ACTIVE", "NO")
+	iup.IupShowXY(dlg, iup.CENTERPARENT, iup.CENTERPARENT)
+}
+
+// Undoes show_child_dialog; must be called from the callbacks that close a dialog
+on_child_dialog_closed :: proc() {
+	_app.dialog_open = false
+	iup.IupSetAttribute(_app.main_dlg, "ACTIVE", "YES")
+}
+
+// Closing the section dialog with the window X. The dialog is destroyed here,
+// which the docs allow as long as IUP_IGNORE is returned so that IUP does not
+// close it a second time. Note that IUP_CLOSE must not be used: returned by a
+// child dialog it closes the main window instead.
+on_section_close :: proc "c" (ih: iup.Ihandle) -> i32 {
+	context = runtime.default_context()
+	context.allocator = _app.alloc
+	context.temp_allocator = _app.temp_alloc
+
+	on_child_dialog_closed()
+	iup.IupDestroy(ih)
+	return iup.IGNORE
+}
+
+// Opens a dialog for a section (placeholder content), centered over the main
+// window. It is destroyed as soon as it is closed.
 open_section_dialog :: proc(title: cstring) {
+	if _app.dialog_open {
+		return
+	}
+
 	title_label := make_label(title)
 	pending_label := make_label(_app.texts.pending)
 
@@ -47,8 +97,9 @@ open_section_dialog :: proc(title: cstring) {
 	dlg := iup.IupDialog(vbox)
 	iup.IupSetAttribute(dlg, "TITLE", title)
 	iup.IupSetAttribute(dlg, "SIZE", "320x160")
+	iup.IupSetCallback(dlg, "CLOSE_CB", on_section_close)
 
-	iup.IupShowXY(dlg, iup.CENTER, iup.CENTER)
+	show_child_dialog(dlg)
 }
 
 // IUP reports every move of the main window here, so the saved position is
@@ -139,6 +190,9 @@ run_iup :: proc() {
 	iup.IupOpen(nil, nil)
 	defer iup.IupClose()
 
+	// Force IUP to interpret all strings as UTF-8 on Windows
+	iup.IupSetGlobal("UTF8MODE", "YES")
+
 	// 1. Label with the name of the active account
 	active_account := &_app.data.accounts[_app.data.active_account]
 	account_title := fmt.tprintf("%s: %s", string(_app.texts.account), active_account.name)
@@ -158,6 +212,12 @@ run_iup :: proc() {
 
 	dlg := iup.IupDialog(vbox)
 	iup.IupSetAttribute(dlg, "TITLE", "Day Trade")
+	// Child dialogs are parented to this one, which keeps them centered over it
+	// and inhibits it while they are open. PARENTDIALOG refers to the dialog by
+	// name, and the name must be registered with IupSetHandle for IUP to resolve
+	// it (setting NAME alone does not do it here).
+	iup.IupSetAttribute(dlg, "NAME", MAIN_DIALOG_NAME)
+	iup.IupSetHandle(MAIN_DIALOG_NAME, dlg)
 
 	// Restore the saved window size (position is applied via IupShowXY below)
 	if _app.config.window.width > 0 && _app.config.window.height > 0 {

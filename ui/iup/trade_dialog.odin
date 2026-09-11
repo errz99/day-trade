@@ -184,21 +184,28 @@ on_trade_add_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	return iup.DEFAULT
 }
 
+// Closing the trade dialog re-enables the main window, which was disabled while
+// the dialog was open, and hides the dialog so that it can be shown again.
+// IUP_CLOSE must not be used here: returned by a child dialog it closes the main
+// window instead.
 on_trade_close_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
+	on_child_dialog_closed()
 	iup.IupHide(_trade.dialog)
 	return iup.DEFAULT
 }
 
-// The dialog is reused, so closing it (X) only hides it
+// Closing with the window X: hiding the dialog requires IUP_IGNORE, so that IUP
+// does not close it (and with it the main window) a second time
 on_trade_dialog_close :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
+	on_child_dialog_closed()
 	iup.IupHide(_trade.dialog)
 	return iup.IGNORE
 }
@@ -219,8 +226,11 @@ trade_row :: proc(label_text: cstring, widget: iup.Ihandle) -> iup.Ihandle {
 	return row
 }
 
-// Builds the dialog the first time it is needed
+// Builds the trade dialog; it is built once and then reused: closing it only
+// hides it, so the next open just shows it again
 trade_build_dialog :: proc() {
+	_trade = Trade_State{}
+
 	texts := common.get_trade_texts(_app.config.language)
 	_trade.texts = texts
 
@@ -311,8 +321,13 @@ trade_build_dialog :: proc() {
 	iup.IupSetCallback(close_button, "ACTION", on_trade_close_action)
 }
 
-// Opens (or re-shows) the trade dialog, refreshing the account, broker and values
+// Opens (or re-shows) the trade dialog, refreshing the account, broker and
+// values. It is centered over the main window and the main window is disabled
+// while it is open, so no other dialog can be opened.
 open_trade_dialog :: proc() {
+	if _app.dialog_open {
+		return
+	}
 	if _trade.dialog == nil {
 		trade_build_dialog()
 	}
@@ -339,5 +354,5 @@ open_trade_dialog :: proc() {
 	iup.IupSetAttribute(_trade.market_list, "VALUE", "1") // futures
 	trade_refresh_values()
 
-	iup.IupShowXY(_trade.dialog, iup.CENTER, iup.CENTER)
+	show_child_dialog(_trade.dialog)
 }
