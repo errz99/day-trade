@@ -39,50 +39,38 @@ make_label :: proc(text: cstring) -> iup.Ihandle {
 	return label
 }
 
-// Shows a dialog owned by the main window and centered over it, so that only one
-// dialog is on screen at a time.
+// Shows a dialog as a modal popup owned by the main window and centered over it:
+// IUP disables the main window while the dialog is open, so its buttons can not
+// be clicked and a second dialog can never be opened, and the main window is
+// enabled again by IUP when the popup ends.
 //
-// The main window is disabled while the dialog is open, which is the modal
-// behaviour: its buttons can not be clicked, so a second dialog can never be
-// opened. The dialog is a plain window shown with IupShowXY rather than a modal
-// popup (IupPopup): in IUP 3 the MODAL attribute is read-only, and a popup
-// leaves the dialog unusable once it ends, so it can not be shown again.
-//
-// The main window is re-enabled by on_child_dialog_closed, called from the close
-// callbacks of the dialog.
+// The popup returns once one of its callbacks returns IUP_CLOSE (or the dialog is
+// hidden) and it does NOT destroy the dialog, so callers destroy it right after
+// this returns. It cannot be shown again either: IUP keeps it marked as modal.
 //
 // IUP_CENTERPARENT centers the dialog over its parent dialog (the main window)
 // instead of over the whole screen; it needs PARENTDIALOG to be defined.
-show_child_dialog :: proc(dlg: iup.Ihandle) {
+show_modal_dialog :: proc(dlg: iup.Ihandle) {
 	iup.IupSetAttribute(dlg, "PARENTDIALOG", MAIN_DIALOG_NAME)
-	_app.dialog_open = true
-	iup.IupSetAttribute(_app.main_dlg, "ACTIVE", "NO")
-	iup.IupShowXY(dlg, iup.CENTERPARENT, iup.CENTERPARENT)
+	iup.IupPopup(dlg, iup.CENTERPARENT, iup.CENTERPARENT)
 }
 
-// Undoes show_child_dialog; must be called from the callbacks that close a dialog
-on_child_dialog_closed :: proc() {
-	_app.dialog_open = false
-	iup.IupSetAttribute(_app.main_dlg, "ACTIVE", "YES")
-}
-
-// Closing the section dialog with the window X. The dialog is destroyed here,
-// which the docs allow as long as IUP_IGNORE is returned so that IUP does not
-// close it a second time. Note that IUP_CLOSE must not be used: returned by a
-// child dialog it closes the main window instead.
+// Closing the section dialog with the window X: ending the popup with IUP_CLOSE
+// is what IUP expects. The dialog itself must not be destroyed here (that would
+// leave IUP with a dangling pointer), its owner destroys it once the popup ends.
 on_section_close :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
-	on_child_dialog_closed()
-	iup.IupDestroy(ih)
-	return iup.IGNORE
+	trace("on_section_close (X)")
+	return iup.CLOSE
 }
 
-// Opens a dialog for a section (placeholder content), centered over the main
-// window. It is destroyed as soon as it is closed.
+// Opens a dialog for a section (placeholder content), modal and centered over the
+// main window. It is destroyed once it is closed.
 open_section_dialog :: proc(title: cstring) {
+	trace("open_section_dialog '%s': dialog_open=%v", title, _app.dialog_open)
 	if _app.dialog_open {
 		return
 	}
@@ -99,7 +87,11 @@ open_section_dialog :: proc(title: cstring) {
 	iup.IupSetAttribute(dlg, "SIZE", "320x160")
 	iup.IupSetCallback(dlg, "CLOSE_CB", on_section_close)
 
-	show_child_dialog(dlg)
+	_app.dialog_open = true
+	show_modal_dialog(dlg)
+	_app.dialog_open = false
+
+	iup.IupDestroy(dlg)
 }
 
 // IUP reports every move of the main window here, so the saved position is
@@ -144,13 +136,16 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	case .Exit:
 		// End of the GUI session: persist data and config (window geometry is
 		// already kept up to date by MOVE_CB / RESIZE_CB)
+		trace("ACTION Exit")
 		dt.save_data("data.json", _app.data)
 		dt.save_config("config.json", _app.config)
 		iup.IupHide(_app.main_dlg)
 		iup.IupExitLoop()
 	case .Trade:
+		trace("ACTION Trade")
 		open_trade_dialog()
 	case .Results, .Account, .Config:
+		trace("ACTION %v", action)
 		open_section_dialog(common.action_title(_app.texts, action))
 	}
 	return iup.DEFAULT
@@ -162,6 +157,7 @@ on_main_close :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
+	trace("on_main_close (X)")
 	dt.save_data("data.json", _app.data)
 	dt.save_config("config.json", _app.config)
 	return iup.CLOSE
@@ -249,5 +245,15 @@ run_iup :: proc() {
 	} else {
 		iup.IupShowXY(dlg, iup.CENTER, iup.CENTER)
 	}
+
+	when DRIVE_ENABLED {
+		trace("--- run_iup: main window shown, starting driver ---")
+		timer := iup.IupTimer()
+		iup.IupSetAttribute(timer, "TIME", "600")
+		iup.IupSetCallback(timer, "ACTION_CB", drive_timer_cb)
+		iup.IupSetAttribute(timer, "RUN", "YES")
+	}
+
 	iup.IupMainLoop()
+	trace("--- IupMainLoop returned ---")
 }

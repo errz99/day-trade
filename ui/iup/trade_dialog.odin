@@ -184,30 +184,27 @@ on_trade_add_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	return iup.DEFAULT
 }
 
-// Closing the trade dialog re-enables the main window, which was disabled while
-// the dialog was open, and hides the dialog so that it can be shown again.
-// IUP_CLOSE must not be used here: returned by a child dialog it closes the main
-// window instead.
+// Closing the trade dialog with its Close button. Hiding the dialog is what ends
+// the popup (which re-enables the main window); IUP_CLOSE from a button does not
+// close it. The dialog is destroyed by open_trade_dialog once the popup ends.
 on_trade_close_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
-	on_child_dialog_closed()
+	trace("on_trade_close_action (Close button)")
 	iup.IupHide(_trade.dialog)
 	return iup.DEFAULT
 }
 
-// Closing with the window X: hiding the dialog requires IUP_IGNORE, so that IUP
-// does not close it (and with it the main window) a second time
+// Closing with the window X
 on_trade_dialog_close :: proc "c" (ih: iup.Ihandle) -> i32 {
 	context = runtime.default_context()
 	context.allocator = _app.alloc
 	context.temp_allocator = _app.temp_alloc
 
-	on_child_dialog_closed()
-	iup.IupHide(_trade.dialog)
-	return iup.IGNORE
+	trace("on_trade_dialog_close (X)")
+	return iup.CLOSE
 }
 
 // --- Layout helpers ---------------------------------------------------------
@@ -226,8 +223,8 @@ trade_row :: proc(label_text: cstring, widget: iup.Ihandle) -> iup.Ihandle {
 	return row
 }
 
-// Builds the trade dialog; it is built once and then reused: closing it only
-// hides it, so the next open just shows it again
+// Builds the trade dialog; it is built for each open, since the previous one is
+// destroyed when it is closed
 trade_build_dialog :: proc() {
 	_trade = Trade_State{}
 
@@ -321,16 +318,17 @@ trade_build_dialog :: proc() {
 	iup.IupSetCallback(close_button, "ACTION", on_trade_close_action)
 }
 
-// Opens (or re-shows) the trade dialog, refreshing the account, broker and
-// values. It is centered over the main window and the main window is disabled
-// while it is open, so no other dialog can be opened.
+// Opens the trade dialog, refreshing the account, broker and values. It is modal
+// and centered over the main window, so no other dialog can be opened while it is
+// on screen. A modal dialog can not be shown twice, so it is destroyed once it is
+// closed and built again by the next open.
 open_trade_dialog :: proc() {
+	trace("open_trade_dialog: entry, dialog_open=%v", _app.dialog_open)
 	if _app.dialog_open {
 		return
 	}
-	if _trade.dialog == nil {
-		trade_build_dialog()
-	}
+
+	trade_build_dialog()
 
 	texts := common.get_trade_texts(_app.config.language)
 	_trade.texts = texts
@@ -354,5 +352,11 @@ open_trade_dialog :: proc() {
 	iup.IupSetAttribute(_trade.market_list, "VALUE", "1") // futures
 	trade_refresh_values()
 
-	show_child_dialog(_trade.dialog)
+	_app.dialog_open = true
+	show_modal_dialog(_trade.dialog)
+	_app.dialog_open = false
+
+	// The popup does not destroy the dialog, and it can not be shown again
+	iup.IupDestroy(_trade.dialog)
+	_trade.dialog = nil
 }
