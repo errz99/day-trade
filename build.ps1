@@ -19,7 +19,7 @@ function Build-Target([string]$UI) {
     Write-Host "[OK] Successfully built $outName" -ForegroundColor Green
 
     # Embed the manifest into the executable when one exists next to it
-    $manifestFile = "$outName.manifest"
+    $manifestFile = "tools/$outName.manifest"
     if (Test-Path $manifestFile) {
         if (-not (Test-Path "_embed_manifest.exe")) {
             odin build tools/embed_manifest -out:_embed_manifest.exe

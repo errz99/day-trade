@@ -44,12 +44,12 @@ if %ERRORLEVEL% neq 0 (
 echo [OK] Successfully built %OUT%
 
 rem Embed the manifest into the executable when one exists next to it
-if exist "%OUT%.manifest" (
+if exist "tools/%OUT%.manifest" (
     if not exist "_embed_manifest.exe" (
         odin build tools/embed_manifest -out:_embed_manifest.exe
         if errorlevel 1 exit /b %errorlevel%
     )
-    _embed_manifest.exe "%OUT%" "%OUT%.manifest"
+    _embed_manifest.exe "%OUT%" "tools/%OUT%.manifest"
     if errorlevel 1 (
         echo [ERROR] Manifest embedding failed for %UI%
         exit /b %errorlevel%

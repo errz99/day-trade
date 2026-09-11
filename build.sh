@@ -27,11 +27,11 @@ build_target() {
     echo "[OK] Successfully built ${OUT}"
 
     # Embed the manifest into the executable when one exists next to it
-    if [ "${IS_WINDOWS_SHELL}" = "1" ] && [ -f "${OUT}.manifest" ]; then
+    if [ "${IS_WINDOWS_SHELL}" = "1" ] && [ -f "tools/${OUT}.manifest" ]; then
         if [ ! -f "_embed_manifest.exe" ]; then
             odin build tools/embed_manifest -out:_embed_manifest.exe
         fi
-        ./_embed_manifest.exe "${OUT}" "${OUT}.manifest"
+        ./_embed_manifest.exe "${OUT}" "tools/${OUT}.manifest"
         echo "[OK] Manifest embedded into ${OUT}"
     fi
 }
