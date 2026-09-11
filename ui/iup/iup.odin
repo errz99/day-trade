@@ -97,7 +97,9 @@ on_button_action :: proc "c" (ih: iup.Ihandle) -> i32 {
 		dt.save_config("config.json", _app.config)
 		iup.IupHide(_app.main_dlg)
 		iup.IupExitLoop()
-	case .Trade, .Results, .Account, .Config:
+	case .Trade:
+		open_trade_dialog()
+	case .Results, .Account, .Config:
 		open_section_dialog(common.action_title(_app.texts, action))
 	}
 	return iup.DEFAULT

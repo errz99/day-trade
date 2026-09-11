@@ -68,6 +68,88 @@ action_title :: proc(texts: Menu_Texts, action: MenuAction) -> cstring {
 }
 
 // ============================================================================
+// Texts of the Trade dialog, shared by the graphical UIs
+// ============================================================================
+
+Trade_Texts :: struct {
+	title:         cstring,
+	account:       cstring,
+	broker:        cstring,
+	market:        cstring,
+	symbol:        cstring,
+	direction:     cstring,
+	long:          cstring,
+	short:         cstring,
+	amount:        cstring,
+	entry:         cstring,
+	exit:          cstring,
+	date:          cstring,
+	add:           cstring,
+	close:         cstring,
+	markets:       [3]cstring, // futures, CFDs, forex
+	err_no_values: cstring,
+	err_quantity:  cstring,
+	err_price:     cstring,
+	err_date:      cstring,
+	err_save:      cstring,
+	added:         cstring, // prefix of the "added" status message
+}
+
+get_trade_texts :: proc(lang: dt.Language) -> Trade_Texts {
+	switch lang {
+	case .English:
+		return Trade_Texts {
+			title = cstring("Trade"),
+			account = cstring("Account"),
+			broker = cstring("Broker"),
+			market = cstring("Market"),
+			symbol = cstring("Symbol"),
+			direction = cstring("Direction"),
+			long = cstring("Long"),
+			short = cstring("Short"),
+			amount = cstring("Amount"),
+			entry = cstring("Entry price"),
+			exit = cstring("Exit price"),
+			date = cstring("Date (YYYYMMDD)"),
+			add = cstring("Add"),
+			close = cstring("Close"),
+			markets = {cstring("Futures"), cstring("CFDs"), cstring("Forex")},
+			err_no_values = cstring("No values available for this market"),
+			err_quantity = cstring("Invalid quantity"),
+			err_price = cstring("Invalid price"),
+			err_date = cstring("Invalid date"),
+			err_save = cstring("Trade registered, but saving failed"),
+			added = cstring("Added"),
+		}
+	case .Spanish:
+		return Trade_Texts {
+			title = cstring("Operar"),
+			account = cstring("Cuenta"),
+			broker = cstring("Broker"),
+			market = cstring("Mercado"),
+			symbol = cstring("Valor"),
+			direction = cstring("Dirección"),
+			long = cstring("Largos"),
+			short = cstring("Cortos"),
+			amount = cstring("Cantidad"),
+			entry = cstring("Precio entrada"),
+			exit = cstring("Precio salida"),
+			date = cstring("Fecha (AAAAMMDD)"),
+			add = cstring("Añadir"),
+			close = cstring("Cerrar"),
+			markets = {cstring("Futuros"), cstring("CFDs"), cstring("Forex")},
+			err_no_values = cstring("No hay valores disponibles para este mercado"),
+			err_quantity = cstring("Cantidad no válida"),
+			err_price = cstring("Precio no válido"),
+			err_date = cstring("Fecha no válida"),
+			err_save = cstring("Operación registrada, pero falló el guardado"),
+			added = cstring("Añadida"),
+		}
+	}
+	return {}
+}
+
+// ============================================================================
 // Shared session bootstrap, used by all UIs (tui, gtk, iup)
 // ============================================================================
 
