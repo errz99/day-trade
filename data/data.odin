@@ -5,6 +5,7 @@ import "core:encoding/json"
 import "core:io"
 import "core:os"
 import "core:strconv"
+import "core:sync"
 import "core:time"
 
 // Supported languages for user interface
@@ -250,7 +251,13 @@ new_default_data :: proc(allocator := context.allocator) -> Data {
 // Custom float marshaler: writes the shortest round-trip representation
 // (e.g. 2.0 -> "2", 0.60 -> "0.6") instead of the full 16-decimal form
 _json_marshalers: map[typeid]json.User_Marshaler
-_json_marshalers_ready := false
+// The user-marshaler registry is process-global and can only be set once per
+// process, so the registration has to happen exactly once even when two threads
+// save at the same time. A plain boolean guard was not enough: both threads read
+// it as false, both registered, and the second one aborted the process
+// ("set_user_marshalers must not be called more than once"). sync.Once provides
+// the double-checked locking.
+_json_marshalers_once: sync.Once
 
 marshal_f64 :: proc(w: io.Writer, v: any, opt: ^json.Marshal_Options) -> json.Marshal_Error {
 	buf: [64]byte
@@ -264,21 +271,18 @@ marshal_f64 :: proc(w: io.Writer, v: any, opt: ^json.Marshal_Options) -> json.Ma
 }
 
 _init_json_marshalers :: proc() {
-	if _json_marshalers_ready {
-		return
-	}
-	// The user-marshaler registry is process-global and outlives the per-session
-	// arena, and its backing map requires cache-line (64-byte) aligned memory.
-	// Allocate it with the default heap allocator instead of context.allocator
-	// (which is the session arena while saving from UI callbacks) so the map
-	// allocation never depends on arena alignment behaviour.
-	session_alloc := context.allocator
-	context.allocator = runtime.heap_allocator()
-	json.set_user_marshalers(&_json_marshalers)
-	_ = json.register_user_marshaler(typeid_of(f64), marshal_f64)
-	context.allocator = session_alloc
-
-	_json_marshalers_ready = true
+	sync.once_do(&_json_marshalers_once, proc() {
+		// The registry outlives the per-session arena, and its backing map requires
+		// cache-line (64-byte) aligned memory. Allocate it with the default heap
+		// allocator instead of context.allocator (which is the session arena while
+		// saving from UI callbacks) so the map allocation never depends on arena
+		// alignment behaviour.
+		session_alloc := context.allocator
+		context.allocator = runtime.heap_allocator()
+		json.set_user_marshalers(&_json_marshalers)
+		_ = json.register_user_marshaler(typeid_of(f64), marshal_f64)
+		context.allocator = session_alloc
+	})
 }
 
 // Saves the given Data to filepath in JSON format, with map keys sorted and
@@ -290,7 +294,10 @@ save_data :: proc(filepath: string, trading_data: Data, allocator := context.all
 	if err != nil {
 		return false
 	}
-	defer delete(json_bytes)
+	// `delete` on a slice uses context.allocator, which is not necessarily the
+	// allocator the slice came from (unlike dynamic arrays, slices do not carry
+	// their allocator). Pass it explicitly so this is correct for any caller.
+	defer delete(json_bytes, allocator)
 
 	return os.write_entire_file(filepath, json_bytes) == os.ERROR_NONE
 }
@@ -301,7 +308,8 @@ load_data :: proc(filepath: string, allocator := context.allocator) -> (Data, bo
 	if err != os.ERROR_NONE {
 		return Data{}, false
 	}
-	defer delete(content)
+	// Same reason as in save_data: free it with the allocator it came from.
+	defer delete(content, allocator)
 
 	trading_data: Data
 	if json_err := json.unmarshal(content, &trading_data, allocator = allocator); json_err != nil {

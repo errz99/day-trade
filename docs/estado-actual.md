@@ -1,7 +1,7 @@
 # Estado actual (documento vivo)
 
-Última actualización: sesión del 11-12/09/2026 (diálogo Trade en WinForms +
-navegación por teclado). Esto es un **handoff**: qué hay hecho, qué está
+Última actualización: 12/09/2026 (dos fallos del módulo de datos arreglados, con
+tests de regresión). Esto es un **handoff**: qué hay hecho, qué está
 verificado, qué queda pendiente y qué decisiones están tomadas.
 
 > Pensado para poder continuar en **otro equipo y otro sistema operativo** (o en
@@ -23,6 +23,21 @@ verificado, qué queda pendiente y qué decisiones están tomadas.
   con `date` obligatorio; `calculate_trade(contract, ...)`; `save_data`/`load_data`
   con migraciones; `current_date_number()`.
 - `Config` (idioma, geometría de ventana, `use_adwaita`) en `config.json`.
+- **Dos fallos latentes arreglados el 12/09/2026**, los dos con test de regresión en
+  `data/data_test.odin` (`odin test data -define:ODIN_TEST_THREADS=1`):
+  1. `load_data`/`save_data` liberaban sus temporales con `context.allocator` en vez
+     de con el asignador que habían recibido (`delete(x)` de un *slice* usa el
+     ambiente). Con un llamante que trae su propia arena, eso liberaba al heap el
+     bloque entero de la arena y al destruirla el proceso moría
+     (`free(): invalid pointer`). Ahora es `delete(x, allocator)`. La app no lo
+     sufría porque usa la arena de sesión también como `context.allocator`.
+  2. `_init_json_marshalers` protegía el registro del marshaller con un booleano, así
+     que dos hilos guardando a la vez abortaban el proceso
+     (`set_user_marshalers must not be called more than once`). Ahora usa
+     `sync.Once`. La app es de un solo hilo y no lo sufría.
+  Los dos se destaparon al empaquetar el módulo como librería (ver el workspace).
+  Verificado: los tests fallan si se revierten los arreglos (con uno aborta con
+  `double free or corruption`, con el otro con la aserción del marshaller).
 
 ### Interfaces
 - **Compartido** (`ui/common`): textos de menú y del diálogo Trade en inglés y
@@ -49,6 +64,12 @@ verificado, qué queda pendiente y qué decisiones están tomadas.
 
 ## Pendiente / siguientes pasos posibles
 
+0. **Sacar el módulo de datos de este repo**: la idea del usuario es que `data/`
+   desaparezca y que la app importe el código Odin de la librería
+   (`lib-day-trade`, que a su vez es el origen de `lib-day-trade-c`, la dependencia
+   C para Go y Zig). Una sola fuente de verdad para el código no gráfico. Cuando se
+   haga: quitar `data/`, apuntar el build a la colección de la librería y comprobar
+   que las tres UIs y la TUI siguen igual.
 1. **Enter en un campo de texto** → pulsar el botón por defecto (Añadir). Hoy
    Espacio/Enter funcionan con el foco en un botón, pero no desde un campo.
 2. **Diálogos reales de Results / Cuenta / Config** (ahora son marcadores con

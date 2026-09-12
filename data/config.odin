@@ -40,10 +40,10 @@ read_legacy_language_from_ini :: proc(
 	if err != os.ERROR_NONE {
 		return .Spanish, false
 	}
-	defer delete(content)
+	defer delete(content, allocator)
 
 	lines := strings.split_lines(string(content), allocator)
-	defer delete(lines)
+	defer delete(lines, allocator)
 	for line in lines {
 		trimmed := strings.trim_space(line)
 		if len(trimmed) == 0 ||
@@ -79,7 +79,7 @@ load_config :: proc(filepath: string, allocator := context.allocator) -> Config 
 		}
 		return default_config()
 	}
-	defer delete(content)
+	defer delete(content, allocator)
 
 	cfg: Config
 	if json_err := json.unmarshal(content, &cfg, allocator = allocator); json_err != nil {
@@ -94,7 +94,7 @@ save_config :: proc(filepath: string, cfg: Config, allocator := context.allocato
 	if err != nil {
 		return false
 	}
-	defer delete(json_bytes)
+	defer delete(json_bytes, allocator)
 
 	return os.write_entire_file(filepath, json_bytes) == os.ERROR_NONE
 }

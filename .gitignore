@@ -30,3 +30,7 @@ profile.cov
 # .vscode/
  
 *.json
+
+# Artefactos de las pruebas (odin test escribe aquí) y binarios de test de Odin
+build/
+*.bin

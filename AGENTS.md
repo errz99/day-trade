@@ -33,6 +33,15 @@ distintos backends de interfaz con `-define:UI=<backend>`.
   o en ficheros con `#+build`).
 - Los `.exe` se quedan bloqueados por procesos vivos: mata `day-trade*` antes de
   recompilar (`LNK1104`).
+- Tests del módulo de datos (los dos de regresión que hay en `data/data_test.odin`):
+
+  ```bash
+  odin test data -define:ODIN_TEST_THREADS=1 -define:ODIN_TEST_TRACK_MEMORY=false
+  ```
+
+  **Con un solo hilo a propósito**: con los cuatro hilos por defecto, el tráfico de
+  `malloc` del test de concurrencia enmascara la corrupción que busca el otro
+  (comprobado: con uno aborta con `double free or corruption`, con cuatro se cuela).
 
 ## Estructura
 
@@ -85,7 +94,19 @@ distintos backends de interfaz con `-define:UI=<backend>`.
    primeros tests precisamente por eso.
 3. `data.json` y `config.json` están en `.gitignore` y **contienen datos reales
    del usuario**: nunca commitearlos ni pisarlos; antes de una prueba que registre
-   trades, copia y restaura el fichero.
+   trades, copia y restaura el fichero (o mejor: copia el binario a un directorio
+   temporal y ejecútalo desde ahí, que es como se probó la TUI).
+4. **No liberar con un asignador lo que se reservó con otro.** `delete(x)` de un
+   *slice* usa `context.allocator`, no el que se pasó a la reserva (los slices no
+   llevan su asignador dentro). `load_data`/`save_data` lo hacían así: con un
+   llamante que trae su propia arena, eso devolvía al heap el bloque entero de la
+   arena y al destruirla el proceso moría con `free(): invalid pointer`. Arreglado
+   el 2026-09-12 (`delete(x, allocator)`) y con test de regresión.
+5. **Un registro global de una sola vez necesita sincronización de verdad.**
+   `_init_json_marshalers` lo protegía con un booleano: dos hilos guardando a la
+   vez entraban los dos y el segundo abortaba con `set_user_marshalers must not be
+   called more than once`. Ahora usa `sync.Once`, con test de regresión de ocho
+   hilos. (La app es de un solo hilo y no lo sufría; cualquier uso concurrente, sí.)
 
 ## Cómo probar una UI en Windows (lo que funciona y lo que no)
 
