@@ -116,6 +116,10 @@ las ventanas por título/clase y manejarlas con Win32 desde PowerShell:
 
 ## Otros sistemas operativos (Linux / macOS)
 
+Pasos concretos para Linux (paquetes, enlazado y verificación):
+[`docs/puesta-en-marcha-linux.md`](docs/puesta-en-marcha-linux.md).
+Resumen:
+
 - Compilación: `./build.sh gtk` (o `./build.sh` a secas; por defecto `gtk`).
   `build.ps1` es solo para Windows. En `build.sh`, `winforms` (y `iup` dentro de
   `all`) solo se intentan en shells de Windows.
