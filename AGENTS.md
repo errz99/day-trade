@@ -114,6 +114,38 @@ las ventanas por título/clase y manejarlas con Win32 desde PowerShell:
   `mag_keyboard.odin` declara lo que faltaba del API. Al actualizar la librería
   hay que volver a aplicar esos tres cambios.
 
+## Otros sistemas operativos (Linux / macOS)
+
+- Compilación: `./build.sh gtk` (o `./build.sh` a secas; por defecto `gtk`).
+  `build.ps1` es solo para Windows. En `build.sh`, `winforms` (y `iup` dentro de
+  `all`) solo se intentan en shells de Windows.
+- En Linux/macOS lo que se usa es el backend **gtk** y la TUI con `-t`/`--terminal`.
+  `winforms` es Win32 y no se puede enlazar ahí; IUP está abandonado.
+- **El método de prueba de UI descrito más abajo (manejar ventanas con Win32 desde
+  PowerShell) es solo de Windows.** En Linux/macOS: ejecutar la app GTK, leer su
+  salida de consola y comprobar el efecto en `data.json`; no hay aquí un método
+  automatizado equivalente documentado, así que hay que decir claramente qué se
+  ha podido verificar y qué no.
+- `tools/embed_manifest` y los manifiestos de `tools/*.manifest` son solo Windows.
+
+## Workspace con varios repositorios
+
+Este repo puede vivir dentro de un workspace mayor con otros repos. Cómo se cargan
+estas instrucciones (comprobado en el plugin `dsh-agent-instructions`):
+
+- Se inyecta primero `$DSH_HOME/AGENTS.md` (global del usuario) y después la
+  **cadena del proyecto**: desde la raíz del proyecto (primer directorio con `.git`
+  subiendo desde el directorio de trabajo) hasta el directorio de trabajo de la
+  sesión, de amplio a específico.
+- La cadena son los **ancestros del directorio de trabajo, no sus hijos**: si la
+  sesión arranca en la raíz del workspace, `day-trade/AGENTS.md` **no** se carga de
+  entrada; se carga en cuanto se lee/escribe/edita un fichero dentro de `day-trade/`
+  (el siguiente request ya lo incluye). Pedirlo explícitamente también vale.
+- Receta para un workspace multi-repo: un `AGENTS.md` en la **raíz del workspace**
+  con lo común y una línea por repo ("para X, lee `X/AGENTS.md`") y un `AGENTS.md`
+  por repo. Hay una plantilla en `docs/plantilla-workspace-AGENTS.md`.
+- `~/.dsh/AGENTS.md` es **por máquina**: no viaja con el repositorio.
+
 ## Preferencias de trabajo del usuario
 
 - Conversación en **español**; **commits en inglés y cortos**.

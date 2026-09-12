@@ -4,6 +4,11 @@
 navegación por teclado). Esto es un **handoff**: qué hay hecho, qué está
 verificado, qué queda pendiente y qué decisiones están tomadas.
 
+> Pensado para poder continuar en **otro equipo y otro sistema operativo** (o en
+> una sesión nueva): lo que hace falta saber para arrancar está en
+> [`../AGENTS.md`](../AGENTS.md), incluidas las secciones "Otros sistemas
+> operativos" y "Workspace con varios repositorios".
+
 ## Hecho y verificado
 
 ### Modelo de datos (`data/`)
